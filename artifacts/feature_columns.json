@@ -1,0 +1,19 @@
+[
+  "network_packet_size",
+  "login_attempts",
+  "session_duration",
+  "ip_reputation_score",
+  "failed_logins",
+  "unusual_time_access",
+  "protocol_type_ICMP",
+  "protocol_type_TCP",
+  "protocol_type_UDP",
+  "encryption_used_AES",
+  "encryption_used_DES",
+  "encryption_used_Unencrypted",
+  "browser_type_Chrome",
+  "browser_type_Edge",
+  "browser_type_Firefox",
+  "browser_type_Safari",
+  "browser_type_Unknown"
+]
