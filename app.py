@@ -121,5 +121,38 @@ with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     
     # Your verified live Tableau Public dashboard link
-tableau_url = "https://public.tableau.com/views/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview?:embed=y&:device=desktop"    # We embed the view dynamically using iframe with ample spatial room
-components.iframe(tableau_url, width=1300, height=850, scrolling=True)
+tableau_js_code = """
+<div class='tableauPlaceholder' id='viz1783484224593' style='position: relative'>
+    <noscript>
+        <a href='#'><img alt='Overview ' src='https://public.tableau.com/static/images/BI/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview/1_rss.png' style='border: none' /></a>
+    </noscript>
+    <object class='tableauViz' style='display:none;'>
+        <param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> 
+        <param name='embed_code_version' value='3' /> 
+        <param name='site_root' value='' />
+        <param name='name' value='BIA_Cyber_Progress_v3_fixed_17834349622720/Overview' />
+        <param name='tabs' value='no' />
+        <param name='toolbar' value='yes' />
+        <param name='static_image' value='https://public.tableau.com/static/images/BI/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview/1.png' /> 
+        <param name='animate_transition' value='yes' />
+        <param name='display_static_image' value='yes' />
+        <param name='display_spinner' value='yes' />
+        <param name='display_overlay' value='yes' />
+        <param name='display_count' value='yes' />
+        <param name='language' value='en-US' />
+        <param name='device' value='desktop' />
+    </object>
+</div>
+<script type='text/javascript'>
+    var divElement = document.getElementById('viz1783484224593');
+    var vizElement = divElement.getElementsByTagName('object')[0];
+    vizElement.style.width='1300px';
+    vizElement.style.height='850px';
+    var scriptElement = document.createElement('script');
+    scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';
+    vizElement.parentNode.insertBefore(scriptElement, vizElement);
+</script>
+"""
+
+# Render the component layout with matching outer canvas constraints
+components.html(tableau_js_code, width=1300, height=850, scrolling=False)
