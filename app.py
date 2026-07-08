@@ -121,6 +121,5 @@ with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     
     # Your verified live Tableau Public dashboard link
-tableau_url = "https://public.tableau.com/views/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link&:embed=y&:device=desktop"    
-    # We embed the view dynamically using iframe with ample spatial room
+tableau_url = "https://public.tableau.com/views/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link&:embed=y&:device=desktop"    # We embed the view dynamically using iframe with ample spatial room
 components.iframe(tableau_url, width=1300, height=850, scrolling=True)
