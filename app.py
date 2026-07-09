@@ -10,7 +10,12 @@ import datetime
 
 # --- 1. Database Configuration ---
 DB_URI = st.secrets["DB_URI"]
-db_engine = create_engine(DB_URI, pool_pre_ping=True)
+db_engine = create_engine(
+    st.secrets["DB_URI"], 
+    pool_size=5, 
+    max_overflow=0, 
+    pool_pre_ping=True
+)
 
 # --- 2. Tableau JWT Token Generation ---
 def generate_tableau_token():
@@ -71,70 +76,67 @@ with tab1:
             session_duration = st.number_input("Session duration (seconds)", min_value=0.0, value=300.0)
             ip_reputation_score = st.slider("IP reputation score", 0.0, 1.0, 0.3)
         submitted = st.form_submit_button("Evaluate Login")
-
-    if submitted:
-        unusual_time_val = 1 if unusual_time_access_str == "Yes" else 0
-        event = {
-            "network_packet_size": network_packet_size, "protocol_type": protocol_type,
-            "login_attempts": login_attempts, "session_duration": session_duration,
-            "encryption_used": encryption_used, "ip_reputation_score": ip_reputation_score,
-            "failed_logins": failed_logins, "browser_type": browser_type,
-            "unusual_time_access": unusual_time_val,
-        }
-        st.session_state.last_evaluated_protocol = protocol_type
-        result = engine.score(event)
-
-        # Prepare the dataframe for SQLAlchemy
-        sync_df = pd.DataFrame([{
-            "session_id": f"LIVE_{int(time.time())}",
-            "network_packet_size": network_packet_size,
-            "protocol_type": protocol_type,
-            "login_attempts": login_attempts,
-            "session_duration": session_duration,
-            "encryption_used": encryption_used,
-            "ip_reputation_score": ip_reputation_score,
-            "failed_logins": failed_logins,
-            "browser_type": browser_type,
-            "unusual_time_access": unusual_time_val,
-            "risk_score": result["risk_score"],
-            "risk_level": result["risk_level"],
-            "recommended_action": result["recommended_action"],
-            "attack_detected": 1 if result["risk_score"] >= 55 else 0,
-            "anomaly_score": round(result["risk_score"] / 100, 4),
-            "iso_flag": 1 if result["risk_score"] >= 55 else 0,
-            "attack_label": "Attack Detected" if result["risk_score"] >= 55 else "Normal",
-            "unusual_time_label": "Unusual Hours" if unusual_time_val == 1 else "Normal Hours",
-            "risk_rank": {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}.get(result["risk_level"], 1),
-            "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
-            "session_duration_min": round(session_duration / 60, 2)
-        }])
-        
-        # Write to database using your existing SQLAlchemy engine
-        sync_df.to_sql('login_logs', db_engine, if_exists='append', index=False)
-        st.toast("✅ Evaluation synced to Cloud Database!", icon="☁️")
-
-        # Trigger Tableau refresh via JavaScript
-        st.markdown("""
-        <script>
-            function refreshTableau() {
-                const viz = document.getElementById('tableau-viz');
-                if (viz) {
-                    viz.refreshDataAsync();
-                } else {
-                    // Retry once after 500ms if not found immediately
-                    setTimeout(refreshTableau, 500);
-                }
+        if submitted:
+            unusual_time_val = 1 if unusual_time_access_str == "Yes" else 0
+            event = {
+                "network_packet_size": network_packet_size, "protocol_type": protocol_type,
+                "login_attempts": login_attempts, "session_duration": session_duration,
+                "encryption_used": encryption_used, "ip_reputation_score": ip_reputation_score,
+                "failed_logins": failed_logins, "browser_type": browser_type,
+                "unusual_time_access": unusual_time_val,
             }
-            refreshTableau();
-        </script>
-        """, unsafe_allow_html=True)
+            st.session_state.last_evaluated_protocol = protocol_type
+            result = engine.score(event)
 
-        # Display results
-        color = RISK_COLORS[result["risk_level"]]
-        st.markdown("---")
-        m1, m2 = st.columns(2)
-        m1.metric("Risk Score", f"{result['risk_score']} / 100")
-        m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
+            # Prepare data
+            sync_df = pd.DataFrame([{
+                "session_id": f"LIVE_{int(time.time())}",
+                "network_packet_size": network_packet_size,
+                "protocol_type": protocol_type,
+                "login_attempts": login_attempts,
+                "session_duration": session_duration,
+                "encryption_used": encryption_used,
+                "ip_reputation_score": ip_reputation_score,
+                "failed_logins": failed_logins,
+                "browser_type": browser_type,
+                "unusual_time_access": unusual_time_val,
+                "risk_score": result["risk_score"],
+                "risk_level": result["risk_level"],
+                "recommended_action": result["recommended_action"],
+                "attack_detected": 1 if result["risk_score"] >= 55 else 0,
+                "anomaly_score": round(result["risk_score"] / 100, 4),
+                "iso_flag": 1 if result["risk_score"] >= 55 else 0,
+                "attack_label": "Attack Detected" if result["risk_score"] >= 55 else "Normal",
+                "unusual_time_label": "Unusual Hours" if unusual_time_val == 1 else "Normal Hours",
+                "risk_rank": {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}.get(result["risk_level"], 1),
+                "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
+                "session_duration_min": round(session_duration / 60, 2)
+            }])
+            
+            # SAFELY write to DB
+            try:
+                with db_engine.begin() as connection:
+                    sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
+                st.toast("✅ Sync successful!", icon="☁️")
+            except Exception as e:
+                st.error(f"Sync failed: {e}")
+
+            # Trigger refresh
+            st.markdown("""
+            <script>
+                const viz = document.getElementById('tableau-viz');
+                if (viz) { viz.refreshDataAsync(); }
+            </script>
+            """, unsafe_allow_html=True)
+
+            # Display results
+            color = RISK_COLORS[result["risk_level"]]
+            st.markdown("---")
+            m1, m2 = st.columns(2)
+            m1.metric("Risk Score", f"{result['risk_score']} / 100")
+            m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
+
+   
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
