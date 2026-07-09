@@ -1,25 +1,22 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from risk_engine import RiskEngine
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 import pandas as pd
 import time
 import jwt
 import uuid
 import datetime
 
-# --- 1. DATABASE CONFIGURATION (Cached to fix Red Connection Error) ---
+# --- 1. DATABASE CONFIGURATION (Optimized for 15-connection limit) ---
 @st.cache_resource
 def get_db_engine():
-    # We reduce the pool_size to 1. 
-    # This ensures Streamlit ONLY takes 1 connection, 
-    # leaving 14 for Tableau and other tasks.
     return create_engine(
         st.secrets["DB_URI"], 
-        pool_size=1, 
-        max_overflow=0,
+        pool_size=1,           # Only take ONE slot
+        max_overflow=0,        # NEVER take more than one
         pool_pre_ping=True,
-        pool_recycle=600  # Automatically reset connection every 10 mins
+        pool_recycle=60        # Kill the connection every 60 seconds to keep it fresh
     )
 
 db_engine = get_db_engine()
@@ -30,7 +27,6 @@ def generate_tableau_token():
     secret_id = st.secrets["TABLEAU_SECRET_ID"]
     secret_value = st.secrets["TABLEAU_SECRET_VALUE"]
     user_email = st.secrets["TABLEAU_USER_EMAIL"]
-
     now = int(time.time())
     payload = {
         "iss": client_id,
@@ -90,7 +86,6 @@ with tab1:
         }
         result = engine.score(event)
 
-        # Build sync data
         sync_df = pd.DataFrame([{
             "session_id": f"LIVE_{int(time.time())}",
             "network_packet_size": network_packet_size,
@@ -116,36 +111,33 @@ with tab1:
         }])
 
         try:
-            # Sync to DB
             with db_engine.begin() as connection:
                 sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
             
-            # 🔄 INCREMENT REFRESH COUNTER
+            # --- THE FIX: WAIT & THEN REFRESH ---
+            # Wait 2 seconds for Supabase to commit before Tableau asks for the data
+            time.sleep(2) 
             st.session_state.refresh_count += 1
-            st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
+            st.toast("✅ evaluation synced. Switching tabs will show latest data.", icon="🚀")
             
         except Exception as e:
             st.error(f"Database error: {e}")
 
-        # --- RESTORED RECOMMENDATION LOGIC ---
+        # Display Results
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
         st.subheader("Result")
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
-        
         st.markdown(f"**Recommended DSS Action:** `{result['recommended_action']}`")
 
-        # Visual feedback based on Risk Level
         if result["risk_level"] == "Low":
-            st.success("Decision: Access Granted. Behavior matches historical normal patterns.")
-        elif result["risk_level"] == "Medium":
-            st.warning("Decision: Step-up Authentication Required. Behavior is slightly unusual.")
-        elif result["risk_level"] == "High":
-            st.warning("Decision: Additional Identity Verification Required. Significant anomaly detected.")
+            st.success("Decision: Access Granted.")
+        elif result["risk_level"] in ["Medium", "High"]:
+            st.warning("Decision: Verification Required.")
         else:
-            st.error("🚨 Decision: LOGIN BLOCKED. Severe anomaly detected. Security team alerted.")
+            st.error("🚨 Decision: LOGIN BLOCKED.")
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
@@ -153,7 +145,7 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # We add 'refresh_count' to the URL to force reload.
+        # Adding the refresh_count to the URL forces Tableau to reload its connection
         rid = st.session_state.refresh_count
         embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
         
