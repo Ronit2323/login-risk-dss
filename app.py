@@ -1,54 +1,31 @@
-"""
-app.py - Final Production Version
-Streamlit (DSS) + Supabase (DB) + Tableau Cloud (BI)
-Seamless JWT Authentication (No Login Screen)
-"""
-
 import streamlit as st
 import streamlit.components.v1 as components
 from risk_engine import RiskEngine
-from alert import send_alert
 from sqlalchemy import create_engine
 import pandas as pd
 import time
-import jwt # pip install PyJWT
+import jwt
 import uuid
 
 # --- 1. Database Configuration ---
-# --- 1. Database Configuration ---
-# Now pulling from secrets for security
 DB_URI = st.secrets["DB_URI"]
 db_engine = create_engine(DB_URI, pool_pre_ping=True)
 
-# --- 2. Tableau Connected App Configuration ---
+# --- 2. Tableau JWT Token Generation ---
 def generate_tableau_token():
-    # Pulling keys from secrets vault
-    CLIENT_ID = st.secrets["TABLEAU_CLIENT_ID"]
-    SECRET_ID = st.secrets["TABLEAU_SECRET_ID"]
-    SECRET_VALUE = st.secrets["TABLEAU_SECRET_VALUE"]
-    USER_EMAIL = st.secrets["TABLEAU_USER_EMAIL"]
-
-    now = int(time.time())
     payload = {
-        "iss": CLIENT_ID,
-        "exp": now + (10 * 60), # Expires in 10 mins
-        "iat": now - 60,         # Issued 1 min ago (Essential for clock sync)
-        "jti": str(uuid.uuid4()),
+        "iss": st.secrets["TABLEAU_CLIENT_ID"],
+        "sub": st.secrets["TABLEAU_USER_EMAIL"],
         "aud": "tableau",
-        "sub": USER_EMAIL,
+        "exp": int(time.time()) + (10 * 60),
+        "jti": str(uuid.uuid4()),
         "scp": ["tableau:views:embed"]
     }
-
-    token = jwt.encode(
-        payload,
-        SECRET_VALUE,
-        algorithm="HS256",
-        headers={
-            "kid": SECRET_ID,
-            "iss": CLIENT_ID
-        }
-    )
-    return token
+    headers = {
+        "kid": st.secrets["TABLEAU_SECRET_ID"],
+        "iss": st.secrets["TABLEAU_CLIENT_ID"]
+    }
+    return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", headers=headers)
 
 # --- 3. App Setup ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
@@ -96,8 +73,6 @@ with tab1:
         st.session_state.last_evaluated_protocol = protocol_type
         result = engine.score(event)
 
-        # Sync to Supabase
-        risk_rank_map = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
         sync_df = pd.DataFrame([{
             "session_id": f"LIVE_{int(time.time())}",
             "network_packet_size": network_packet_size,
@@ -117,45 +92,27 @@ with tab1:
             "iso_flag": 1 if result["risk_score"] >= 55 else 0,
             "attack_label": "Attack Detected" if result["risk_score"] >= 55 else "Normal",
             "unusual_time_label": "Unusual Hours" if unusual_time_val == 1 else "Normal Hours",
-            "risk_rank": risk_rank_map.get(result["risk_level"], 1),
+            "risk_rank": {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}.get(result["risk_level"], 1),
             "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
             "session_duration_min": round(session_duration / 60, 2)
         }])
         sync_df.to_sql('login_logs', db_engine, if_exists='append', index=False)
         st.toast("✅ Evaluation synced to Cloud Database!", icon="☁️")
 
-        # UI Results
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
-        st.markdown(f"**Recommended DSS action:** {result['recommended_action']}")
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
-    
     try:
-        # 1. Generate token
         token = generate_tableau_token()
-        
-        # 2. Your URL
+        # Corrected URL: Removed '/authoring/'
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
+        embed_url = f"{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n"
         
-        # 3. FORCE REFRESH: We use a timestamp (ts) and :refresh=y
-        # This makes Tableau pull the new row from Supabase immediately
-        ts = int(time.time())
-        
-        # Ensure :token is the VERY FIRST parameter
-        embed_url = f"{base_url}?:token={token}&:embed=yes&:refresh=yes&ts={ts}&:showVizHome=no&:toolbar=bottom"
-        
-        # 4. Display help message
-        protocol_filter = st.session_state.last_evaluated_protocol
-        if protocol_filter:
-            st.info(f"✨ Evaluation complete. Dashboard is refreshing live data for: **{protocol_filter}**")
-
-        # 5. The Iframe
         st.components.v1.iframe(embed_url, height=900, scrolling=True)
-        
     except Exception as e:
-        st.error(f"Auth Error: {e}")
+        st.error(f"Authentication Error: {e}")
