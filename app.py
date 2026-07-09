@@ -119,21 +119,21 @@ with tab1:
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
-        # Generate the JWT
+        # 1. Generate your token
         token = generate_tableau_token()
-        base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # Inject raw HTML to use the 'allow' attribute correctly
+        # 2. Inject the v3 Embedding API code
         tableau_html = f"""
-        <iframe 
-            src="{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n" 
-            width="100%" 
-            height="900" 
-            frameborder="0" 
-            allow="fullscreen; storage-access; encrypted-media">
-        </iframe>
+        <script type='module' src='https://10ax.online.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js'></script>
+        <tableau-viz 
+            id='tableau-viz' 
+            src='https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview' 
+            token='{token}'
+            width='100%' 
+            height='702' 
+            toolbar='bottom'>
+        </tableau-viz>
         """
         st.markdown(tableau_html, unsafe_allow_html=True)
-        
     except Exception as e:
         st.error(f"Authentication Error: {e}")
