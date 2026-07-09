@@ -84,6 +84,7 @@ with tab1:
         st.session_state.last_evaluated_protocol = protocol_type
         result = engine.score(event)
 
+        # Prepare the dataframe for SQLAlchemy
         sync_df = pd.DataFrame([{
             "session_id": f"LIVE_{int(time.time())}",
             "network_packet_size": network_packet_size,
@@ -107,9 +108,22 @@ with tab1:
             "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
             "session_duration_min": round(session_duration / 60, 2)
         }])
+        
+        # Write to database using your existing SQLAlchemy engine
         sync_df.to_sql('login_logs', db_engine, if_exists='append', index=False)
         st.toast("✅ Evaluation synced to Cloud Database!", icon="☁️")
 
+        # Trigger Tableau refresh via JavaScript
+        st.markdown("""
+        <script>
+            const viz = document.getElementById('tableau-viz');
+            if (viz) { 
+                viz.refreshDataAsync(); 
+            }
+        </script>
+        """, unsafe_allow_html=True)
+
+        # Display results
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
         m1, m2 = st.columns(2)
