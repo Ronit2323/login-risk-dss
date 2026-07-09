@@ -119,26 +119,26 @@ with tab1:
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
-        # Generate the JWT
         token = generate_tableau_token()
-        
-        # Ensure base_url is the exact View URL
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # Inject the v3 Embedding API
-        # The 'token' attribute is the mandatory link for JWT auth
+        # Use st.components.v1.html to create a dedicated container
+        import streamlit.components.v1 as components
+        
         tableau_html = f"""
-        <script type='module' src='https://10ax.online.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js'></script>
-        <tableau-viz 
-            id='tableau-viz' 
-            src='{base_url}' 
-            token='{token}'
-            width='100%' 
-            height='900' 
-            toolbar='bottom'>
-        </tableau-viz>
+        <div id="tableau-container" style="width: 100%; height: 900px;">
+            <script type='module' src='https://10ax.online.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js'></script>
+            <tableau-viz 
+                id='tableau-viz' 
+                src='{base_url}' 
+                token='{token}'
+                width='100%' 
+                height='100%' 
+                toolbar='bottom'>
+            </tableau-viz>
+        </div>
         """
-        st.markdown(tableau_html, unsafe_allow_html=True)
+        components.html(tableau_html, height=900)
         
     except Exception as e:
         st.error(f"Authentication Error: {e}")
