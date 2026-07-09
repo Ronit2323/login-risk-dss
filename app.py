@@ -108,22 +108,21 @@ with tab1:
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
-        token = generate_tableau_token()
-        # Ensure this is the clean View URL, NOT the /authoring/ URL
-        base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
+        # 1. Generate the token using the keys from st.secrets
+        token = generate_tableau_token() 
         
-        # We add the :token parameter here
+        # 2. Build the URL
+        base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         embed_url = f"{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n"
         
-        # Injecting the iframe directly allows us to use the 'allow' attribute 
-        # which is necessary for modern browser cookie security policies
+        # 3. Inject the iframe with explicit browser permissions
         tableau_html = f"""
         <iframe 
             src="{embed_url}" 
-            width="100%"  
+            width="100%" 
             height="900" 
             frameborder="0" 
-            allow="fullscreen; clipboard-read; clipboard-write; display-capture; geolocation; microphone; camera; midi; encrypted-media; storage-access">
+            allow="fullscreen; storage-access; encrypted-media">
         </iframe>
         """
         st.markdown(tableau_html, unsafe_allow_html=True)
