@@ -114,22 +114,39 @@ with tab1:
                 "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
                 "session_duration_min": round(session_duration / 60, 2)
             }])
-            
-            # SAFELY write to DB
+            # Use this refined pattern for the write operation
             try:
-                with db_engine.begin() as connection:
-                    sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
-                st.toast("✅ Sync successful!", icon="☁️")
+                with db_engine.connect() as connection:
+                    # Use a transaction block to ensure the write finishes and commits
+                    with connection.begin():
+                        sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
+                st.toast("✅ Data committed to DB", icon="☁️")
             except Exception as e:
                 st.error(f"Sync failed: {e}")
+            
+            # SAFELY write to DB
+            
 
             # Trigger refresh
             st.markdown("""
-            <script>
-                const viz = document.getElementById('tableau-viz');
-                if (viz) { viz.refreshDataAsync(); }
-            </script>
-            """, unsafe_allow_html=True)
+                <script>
+                    function forceTableauRefresh() {
+                        // Find the iframe directly - this is more reliable than getElementById
+                        const tableauIframe = document.querySelector('iframe');
+                        if (tableauIframe) {
+                            // Access the Tableau Viz object within the iframe
+                            const viz = tableau.extensions.environment ? tableau.extensions.environment.getViz() : null;
+                            // Or use the native embed API call
+                            const vizObj = tableau.embedding.Viz.getVizs()[0];
+                            if (vizObj) {
+                                vizObj.refreshDataAsync();
+                            }
+                        }
+                    }
+                    // Call it after a short delay to ensure DOM is ready
+                    setTimeout(forceTableauRefresh, 1000);
+                </script>
+                """, unsafe_allow_html=True)
 
             # Display results
             color = RISK_COLORS[result["risk_level"]]
