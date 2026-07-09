@@ -31,19 +31,22 @@ def generate_tableau_token():
     now = int(time.time())
     payload = {
         "iss": CLIENT_ID,
-        "exp": now + (10 * 60),
-        "iat": now - 60,
+        "exp": now + (10 * 60), # Expires in 10 mins
+        "iat": now - 60,         # Issued 1 min ago (Essential for clock sync)
         "jti": str(uuid.uuid4()),
         "aud": "tableau",
         "sub": USER_EMAIL,
-        "scp": ["tableau:views:embed", "tableau:views:embed_authoring"]
+        "scp": ["tableau:views:embed"]
     }
 
     token = jwt.encode(
         payload,
         SECRET_VALUE,
         algorithm="HS256",
-        headers={"kid": SECRET_ID, "iss": CLIENT_ID}
+        headers={
+            "kid": SECRET_ID,
+            "iss": CLIENT_ID
+        }
     )
     return token
 
@@ -131,13 +134,18 @@ with tab1:
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
+    
     try:
         token = generate_tableau_token()
-        # Ensure the URL has '?:embed=yes&:token={token}' as the very first parameters
+        
+        # This is the CLEANEST URL format for Connected Apps
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
-        embed_url = f"{base_url}?:embed=yes&:token={token}&:showVizHome=no&:toolbar=bottom&:refresh=yes"
+        
+        # Note the '?:embed=yes' followed by '&:token='
+        embed_url = f"{base_url}?:embed=yes&:token={token}&:toolbar=bottom&:showVizHome=no"
         
         st.components.v1.iframe(embed_url, height=900, scrolling=True)
-        st.caption("🔒 Secured connection via Tableau Connected App (JWT)")
+        st.caption("🔒 Secured via Tableau JWT Authentication")
+        
     except Exception as e:
-        st.error(f"Tableau Auth Error: {e}")
+        st.error(f"Authentication Error: {e}")
