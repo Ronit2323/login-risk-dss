@@ -8,23 +8,20 @@ import jwt
 import uuid
 import datetime
 
-# --- 1. DATABASE CONFIGURATION (Cached with 60s recycle for Max Safety) ---
+# --- 1. DATABASE CONFIGURATION ---
 @st.cache_resource
 def get_db_engine():
-    # We reduce the pool_size to 1. 
-    # This ensures Streamlit ONLY takes 1 connection, 
-    # leaving 14 for Tableau and other tasks.
     return create_engine(
         st.secrets["DB_URI"], 
         pool_size=1, 
         max_overflow=0,
         pool_pre_ping=True,
-        pool_recycle=60  # CHANGED: Reset every 60 seconds to prevent "stuck" connections
+        pool_recycle=60 
     )
 
 db_engine = get_db_engine()
 
-# --- 2. TABLEAU JWT AUTH ---
+# --- 2. TABLEAU JWT AUTH (Refined Scopes) ---
 def generate_tableau_token():
     client_id = st.secrets["TABLEAU_CLIENT_ID"]
     secret_id = st.secrets["TABLEAU_SECRET_ID"]
@@ -34,12 +31,12 @@ def generate_tableau_token():
     now = int(time.time())
     payload = {
         "iss": client_id,
-        "exp": now + (10 * 60),
-        "iat": now - 60,
+        "exp": now + (10 * 60), 
+        "iat": now - 60,         
         "jti": str(uuid.uuid4()),
         "aud": "tableau",
         "sub": user_email,
-        "scp": ["tableau:views:embed", "tableau:views:embed_authoring"]
+        "scp": ["tableau:views:embed", "tableau:views:embed_authoring"] # Expanded scopes
     }
     return jwt.encode(payload, secret_value, algorithm="HS256", headers={"kid": secret_id, "iss": client_id})
 
@@ -50,7 +47,6 @@ if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
 st.title("Intelligent Login Risk Assessment")
-st.caption("Real-time BI + DSS System")
 
 @st.cache_resource
 def load_engine():
@@ -90,7 +86,6 @@ with tab1:
         }
         result = engine.score(event)
 
-        # Build sync data
         sync_df = pd.DataFrame([{
             "session_id": f"LIVE_{int(time.time())}",
             "network_packet_size": network_packet_size,
@@ -116,46 +111,40 @@ with tab1:
         }])
 
         try:
-            # Sync to DB
             with db_engine.begin() as connection:
                 sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
             
-            # 🔄 INCREMENT REFRESH COUNTER
             st.session_state.refresh_count += 1
-            st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
+            st.toast("✅ Evaluation synced!", icon="🚀")
             
         except Exception as e:
             st.error(f"Database error: {e}")
 
-        # --- RESTORED RECOMMENDATION LOGIC ---
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
         st.subheader("Result")
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
-        
         st.markdown(f"**Recommended DSS Action:** `{result['recommended_action']}`")
 
-        # Visual feedback based on Risk Level
         if result["risk_level"] == "Low":
-            st.success("Decision: Access Granted. Behavior matches historical normal patterns.")
-        elif result["risk_level"] == "Medium":
-            st.warning("Decision: Step-up Authentication Required. Behavior is slightly unusual.")
-        elif result["risk_level"] == "High":
-            st.warning("Decision: Additional Identity Verification Required. Significant anomaly detected.")
+            st.success("Decision: Access Granted.")
+        elif result["risk_level"] in ["Medium", "High"]:
+            st.warning("Decision: Verification Required.")
         else:
-            st.error("🚨 Decision: LOGIN BLOCKED. Severe anomaly detected. Security team alerted.")
+            st.error("🚨 Decision: LOGIN BLOCKED.")
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
         token = generate_tableau_token()
+        # Ensure URL is clean
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # We add 'refresh_count' to the URL to force reload.
         rid = st.session_state.refresh_count
-        embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
+        # FIX: Ensure :embed=yes comes immediately after the '?'
+        embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no&:toolbar=bottom"
         
         components.iframe(embed_url, height=850, scrolling=True)
         
