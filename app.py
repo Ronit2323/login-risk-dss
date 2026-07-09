@@ -116,10 +116,16 @@ with tab1:
         # Trigger Tableau refresh via JavaScript
         st.markdown("""
         <script>
-            const viz = document.getElementById('tableau-viz');
-            if (viz) { 
-                viz.refreshDataAsync(); 
+            function refreshTableau() {
+                const viz = document.getElementById('tableau-viz');
+                if (viz) {
+                    viz.refreshDataAsync();
+                } else {
+                    // Retry once after 500ms if not found immediately
+                    setTimeout(refreshTableau, 500);
+                }
             }
+            refreshTableau();
         </script>
         """, unsafe_allow_html=True)
 
