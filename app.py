@@ -136,16 +136,26 @@ with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     
     try:
+        # 1. Generate token
         token = generate_tableau_token()
         
-        # This is the CLEANEST URL format for Connected Apps
+        # 2. Your URL
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # Note the '?:embed=yes' followed by '&:token='
-        embed_url = f"{base_url}?:embed=yes&:token={token}&:toolbar=bottom&:showVizHome=no"
+        # 3. FORCE REFRESH: We use a timestamp (ts) and :refresh=y
+        # This makes Tableau pull the new row from Supabase immediately
+        ts = int(time.time())
         
+        # Ensure :token is the VERY FIRST parameter
+        embed_url = f"{base_url}?:token={token}&:embed=yes&:refresh=yes&ts={ts}&:showVizHome=no&:toolbar=bottom"
+        
+        # 4. Display help message
+        protocol_filter = st.session_state.last_evaluated_protocol
+        if protocol_filter:
+            st.info(f"✨ Evaluation complete. Dashboard is refreshing live data for: **{protocol_filter}**")
+
+        # 5. The Iframe
         st.components.v1.iframe(embed_url, height=900, scrolling=True)
-        st.caption("🔒 Secured via Tableau JWT Authentication")
         
     except Exception as e:
-        st.error(f"Authentication Error: {e}")
+        st.error(f"Auth Error: {e}")
