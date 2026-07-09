@@ -8,16 +8,18 @@ import jwt
 import uuid
 import datetime
 
-# --- 1. DATABASE CONFIGURATION ---
+# --- 1. DATABASE CONFIGURATION (Cached to fix Red Connection Error) ---
 @st.cache_resource
 def get_db_engine():
-    # We keep pool_size at 1 to leave room for Tableau to connect
+    # We reduce the pool_size to 1. 
+    # This ensures Streamlit ONLY takes 1 connection, 
+    # leaving 14 for Tableau and other tasks.
     return create_engine(
         st.secrets["DB_URI"], 
         pool_size=1, 
         max_overflow=0,
         pool_pre_ping=True,
-        pool_recycle=600 
+        pool_recycle=600  # Automatically reset connection every 10 mins
     )
 
 db_engine = get_db_engine()
@@ -32,8 +34,8 @@ def generate_tableau_token():
     now = int(time.time())
     payload = {
         "iss": client_id,
-        "exp": now + (10 * 60), 
-        "iat": now - 60,         
+        "exp": now + (10 * 60),
+        "iat": now - 60,
         "jti": str(uuid.uuid4()),
         "aud": "tableau",
         "sub": user_email,
@@ -114,36 +116,23 @@ with tab1:
         }])
 
         try:
+            # Sync to DB
             with db_engine.begin() as connection:
                 sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
             
-            # This triggers the Tableau refresh on the next tab click
+            # 🔄 INCREMENT REFRESH COUNTER: This forces the Tableau tab to reload when clicked
             st.session_state.refresh_count += 1
-            st.toast("✅ Evaluation synced to Cloud!", icon="🚀")
+            st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
             
         except Exception as e:
             st.error(f"Database error: {e}")
 
-        # --- RESTORED RESULTS DISPLAY ---
+        # Display Results
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
-        st.subheader("Result")
-        
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
-        
-        st.markdown(f"**Recommended DSS action:** `{result['recommended_action']}`")
-
-        # Visual advice based on risk
-        if result["risk_level"] == "Low":
-            st.success("Login allowed. No further action required.")
-        elif result["risk_level"] == "Medium":
-            st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
-        elif result["risk_level"] == "High":
-            st.warning("Additional identity verification required (e.g. security questions).")
-        else:
-            st.error("🚨 LOGIN BLOCKED. Security team has been notified.")
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
@@ -151,6 +140,8 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
+        # We add 'refresh_count' to the URL. 
+        # Every time a new evaluation happens, the URL changes slightly, forcing Tableau to reload.
         rid = st.session_state.refresh_count
         embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
         
