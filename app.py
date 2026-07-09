@@ -119,13 +119,14 @@ with tab1:
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
+        # Generate the JWT
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
-        embed_url = f"{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n"
         
+        # Inject raw HTML to use the 'allow' attribute correctly
         tableau_html = f"""
         <iframe 
-            src="{embed_url}" 
+            src="{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n" 
             width="100%" 
             height="900" 
             frameborder="0" 
@@ -133,5 +134,6 @@ with tab2:
         </iframe>
         """
         st.markdown(tableau_html, unsafe_allow_html=True)
+        
     except Exception as e:
         st.error(f"Authentication Error: {e}")
