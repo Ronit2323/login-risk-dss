@@ -7,20 +7,20 @@ import time
 import jwt
 import uuid
 import datetime
-from supabase import create_client
 
-# --- 1. Database & Supabase Configuration ---
+# --- 1. Database Configuration ---
 DB_URI = st.secrets["DB_URI"]
 db_engine = create_engine(DB_URI, pool_pre_ping=True)
-supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 # --- 2. Tableau JWT Token Generation ---
 def generate_tableau_token():
+    # Use the secrets from Streamlit
     client_id = st.secrets["TABLEAU_CLIENT_ID"]
     secret_id = st.secrets["TABLEAU_SECRET_ID"]
     secret_value = st.secrets["TABLEAU_SECRET_VALUE"]
     user_email = st.secrets["TABLEAU_USER_EMAIL"]
 
+    # Define the payload as per Tableau requirements
     payload = {
         "iss": client_id,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
@@ -30,6 +30,7 @@ def generate_tableau_token():
         "scp": ["tableau:views:embed"]
     }
 
+    # Generate the token
     token = jwt.encode(
         payload, 
         secret_value, 
@@ -37,14 +38,7 @@ def generate_tableau_token():
         headers={"kid": secret_id, "iss": client_id}
     )
     return token
-
-# --- 3. Global Data Functions ---
-@st.cache_data(ttl=60)
-def get_recommendations():
-    # Adjust 'recommendations' to your actual table name in Supabase
-    return supabase.table("login_logs").select("*").order("session_id", desc=True).limit(5).execute()
-
-# --- 4. App Setup ---
+# --- 3. App Setup ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 st.title("Intelligent Login Risk Assessment")
 
@@ -58,7 +52,7 @@ RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critic
 if "last_evaluated_protocol" not in st.session_state:
     st.session_state.last_evaluated_protocol = None
 
-# --- 5. Tabs ---
+# --- 4. Tabs ---
 tab1, tab2 = st.tabs(["🔒 Interactive Risk Evaluator", "📊 System Risk Analytics & Behavioral Insights"])
 
 with tab1:
@@ -122,29 +116,15 @@ with tab1:
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
 
-        # Trigger auto-refresh for Tableau
-        st.markdown("""
-        <script>
-            const viz = document.getElementById('tableau-viz');
-            if (viz) { viz.refreshDataAsync(); }
-        </script>
-        """, unsafe_allow_html=True)
-
-    st.subheader("System Recommendations")
-    rec_data = get_recommendations()
-    if rec_data.data:
-        st.dataframe(pd.DataFrame(rec_data.data))
-    else:
-        st.info("No recommendations available.")
-
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
+        # Use a wrapper div to force the sizing
         tableau_html = f"""
-        <div id="tableau-wrapper" style="width: 100%; height: 800px;">
+        <div id="tableau-wrapper" style="width: 100%; height: 800px; overflow: hidden;">
             <script type='module' src='https://10ax.online.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js'></script>
             <tableau-viz 
                 id='tableau-viz' 
@@ -153,10 +133,11 @@ with tab2:
                 width='100%' 
                 height='100%' 
                 toolbar='bottom'
-                style='display: block;'>
+                style='display: block; width: 100%; height: 100%;'>
             </tableau-viz>
         </div>
         """
-        components.html(tableau_html, height=800)
+        st.components.v1.html(tableau_html, height=800)
+        
     except Exception as e:
         st.error(f"Authentication Error: {e}")
