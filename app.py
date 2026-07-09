@@ -120,19 +120,32 @@ with tab1:
             with db_engine.begin() as connection:
                 sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
             
-            # 🔄 INCREMENT REFRESH COUNTER: This forces the Tableau tab to reload when clicked
+            # 🔄 INCREMENT REFRESH COUNTER
             st.session_state.refresh_count += 1
             st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
             
         except Exception as e:
             st.error(f"Database error: {e}")
 
-        # Display Results
+        # --- RESTORED RECOMMENDATION LOGIC ---
         color = RISK_COLORS[result["risk_level"]]
         st.markdown("---")
+        st.subheader("Result")
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
         m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
+        
+        st.markdown(f"**Recommended DSS Action:** `{result['recommended_action']}`")
+
+        # Visual feedback based on Risk Level
+        if result["risk_level"] == "Low":
+            st.success("Decision: Access Granted. Behavior matches historical normal patterns.")
+        elif result["risk_level"] == "Medium":
+            st.warning("Decision: Step-up Authentication Required. Behavior is slightly unusual.")
+        elif result["risk_level"] == "High":
+            st.warning("Decision: Additional Identity Verification Required. Significant anomaly detected.")
+        else:
+            st.error("🚨 Decision: LOGIN BLOCKED. Severe anomaly detected. Security team alerted.")
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
@@ -140,8 +153,7 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # We add 'refresh_count' to the URL. 
-        # Every time a new evaluation happens, the URL changes slightly, forcing Tableau to reload.
+        # We add 'refresh_count' to the URL to force reload.
         rid = st.session_state.refresh_count
         embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
         
