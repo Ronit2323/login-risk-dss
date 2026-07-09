@@ -123,11 +123,12 @@ with tab1:
             # Sync to DB
             with db_engine.begin() as connection:
                 sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
+            st.toast("✅ Sync successful!", icon="🚀")
+            st.session_state.refresh_count += 1
+            st.rerun()
             
             # 🔄 INCREMENT REFRESH COUNTER
-            st.session_state.refresh_count += 1
-            st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
-            db_engine.dispose() 
+            
             
             # --- ADD THIS: ROBUST TABLEAU TRIGGER ---
             # We use a unique key based on the refresh_count so Streamlit 
