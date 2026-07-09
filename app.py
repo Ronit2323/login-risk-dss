@@ -109,10 +109,16 @@ with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
         token = generate_tableau_token()
-        # Corrected URL: Removed '/authoring/'
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         embed_url = f"{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n"
         
-        st.components.v1.iframe(embed_url, height=900, scrolling=True)
+        # ADDED: 'allow' attribute to permit third-party cookie/storage access
+        st.components.v1.iframe(
+            embed_url, 
+            height=900, 
+            scrolling=True,
+            # This allows the embedded content to function correctly in modern browsers
+            extra_attributes='allow="fullscreen; clipboard-read; clipboard-write; display-capture; geolocation; microphone; camera; midi; encrypted-media"'
+        )
     except Exception as e:
         st.error(f"Authentication Error: {e}")
