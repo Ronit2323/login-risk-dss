@@ -122,11 +122,9 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         
-        # Use st.components.v1.html to create a dedicated container
-        import streamlit.components.v1 as components
-        
+        # Use a wrapper div to force the sizing
         tableau_html = f"""
-        <div id="tableau-container" style="width: 100%; height: 900px;">
+        <div id="tableau-wrapper" style="width: 100%; height: 800px; overflow: hidden;">
             <script type='module' src='https://10ax.online.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js'></script>
             <tableau-viz 
                 id='tableau-viz' 
@@ -134,11 +132,12 @@ with tab2:
                 token='{token}'
                 width='100%' 
                 height='100%' 
-                toolbar='bottom'>
+                toolbar='bottom'
+                style='display: block; width: 100%; height: 100%;'>
             </tableau-viz>
         </div>
         """
-        components.html(tableau_html, height=900)
+        st.components.v1.html(tableau_html, height=800)
         
     except Exception as e:
         st.error(f"Authentication Error: {e}")
