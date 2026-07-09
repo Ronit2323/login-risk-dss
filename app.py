@@ -116,11 +116,11 @@ with tab1:
             }])
             # Use this refined pattern for the write operation
             try:
-                with db_engine.connect() as connection:
-                    # Use a transaction block to ensure the write finishes and commits
-                    with connection.begin():
-                        sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
-                st.toast("✅ Data committed to DB", icon="☁️")
+                # 'with db_engine.begin()' is the most efficient way to release 
+                # the connection back to the session pool immediately after commit.
+                with db_engine.begin() as connection:
+                    sync_df.to_sql('login_logs', con=connection, if_exists='append', index=False)
+                st.toast("✅ Sync successful!")
             except Exception as e:
                 st.error(f"Sync failed: {e}")
             
