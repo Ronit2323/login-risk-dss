@@ -11,14 +11,15 @@ import datetime
 # --- 1. DATABASE CONFIGURATION (Cached to fix Red Connection Error) ---
 @st.cache_resource
 def get_db_engine():
-    # We set pool_size to 2 and max_overflow to 0. 
-    # This leaves plenty of connections open for Tableau to use!
+    # We reduce the pool_size to 1. 
+    # This ensures Streamlit ONLY takes 1 connection, 
+    # leaving 14 for Tableau and other tasks.
     return create_engine(
         st.secrets["DB_URI"], 
-        pool_size=2, 
+        pool_size=1, 
         max_overflow=0,
         pool_pre_ping=True,
-        pool_recycle=300
+        pool_recycle=600  # Automatically reset connection every 10 mins
     )
 
 db_engine = get_db_engine()
