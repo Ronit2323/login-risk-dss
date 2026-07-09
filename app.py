@@ -6,6 +6,7 @@ import pandas as pd
 import time
 import jwt
 import uuid
+import datetime
 
 # --- 1. Database Configuration ---
 DB_URI = st.secrets["DB_URI"]
@@ -13,20 +14,30 @@ db_engine = create_engine(DB_URI, pool_pre_ping=True)
 
 # --- 2. Tableau JWT Token Generation ---
 def generate_tableau_token():
+    # Use the secrets from Streamlit
+    client_id = st.secrets["TABLEAU_CLIENT_ID"]
+    secret_id = st.secrets["TABLEAU_SECRET_ID"]
+    secret_value = st.secrets["TABLEAU_SECRET_VALUE"]
+    user_email = st.secrets["TABLEAU_USER_EMAIL"]
+
+    # Define the payload as per Tableau requirements
     payload = {
-        "iss": st.secrets["TABLEAU_CLIENT_ID"],
-        "sub": st.secrets["TABLEAU_USER_EMAIL"],
-        "aud": "tableau",
-        "exp": int(time.time()) + (10 * 60),
+        "iss": client_id,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
         "jti": str(uuid.uuid4()),
+        "aud": "tableau",
+        "sub": user_email,
         "scp": ["tableau:views:embed"]
     }
-    headers = {
-        "kid": st.secrets["TABLEAU_SECRET_ID"],
-        "iss": st.secrets["TABLEAU_CLIENT_ID"]
-    }
-    return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", headers=headers)
 
+    # Generate the token
+    token = jwt.encode(
+        payload, 
+        secret_value, 
+        algorithm="HS256", 
+        headers={"kid": secret_id, "iss": client_id}
+    )
+    return token
 # --- 3. App Setup ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 st.title("Intelligent Login Risk Assessment")
@@ -108,14 +119,10 @@ with tab1:
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
     try:
-        # 1. Generate the token using the keys from st.secrets
-        token = generate_tableau_token() 
-        
-        # 2. Build the URL
+        token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         embed_url = f"{base_url}?:embed=y&:token={token}&:refresh=y&:showVizHome=n&:toolbar=n"
         
-        # 3. Inject the iframe with explicit browser permissions
         tableau_html = f"""
         <iframe 
             src="{embed_url}" 
@@ -126,6 +133,5 @@ with tab2:
         </iframe>
         """
         st.markdown(tableau_html, unsafe_allow_html=True)
-        
     except Exception as e:
         st.error(f"Authentication Error: {e}")
