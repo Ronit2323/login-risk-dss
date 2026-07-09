@@ -1,73 +1,102 @@
 """
-app.py
-Deployment UI for Intelligent Login Risk Assessment (BI + DSS project).
-Run with:
-    streamlit run app.py
-
-Flow:
-  1. User enters/submits a login event's features (as if this came from
-     a live authentication system).
-  2. RiskEngine scores it with the trained Isolation Forest pipeline
-     (same logic as pipeline.py, applied to one event).
-  3. DSS logic maps the risk level to a system action:
-        Low       -> Allow Login
-        Medium    -> Require MFA
-        High      -> Additional Verification
-        Critical  -> Block Login & Send Security Alert (emails st125881@ait.asia)
+app.py - Final Production Version
+Streamlit (DSS) + Supabase (DB) + Tableau Cloud (BI)
+Seamless JWT Authentication (No Login Screen)
 """
 
 import streamlit as st
 import streamlit.components.v1 as components
 from risk_engine import RiskEngine
 from alert import send_alert
+from sqlalchemy import create_engine
+import pandas as pd
+import time
+import jwt # pip install PyJWT
+import uuid
 
-# Changed layout from "centered" to "wide" to beautifully accommodate your full grid dashboard
+# --- 1. Database Configuration ---
+# --- 1. Database Configuration ---
+# Now pulling from secrets for security
+DB_URI = st.secrets["DB_URI"]
+db_engine = create_engine(DB_URI, pool_pre_ping=True)
+
+# --- 2. Tableau Connected App Configuration ---
+def generate_tableau_token():
+    # Pulling keys from secrets vault
+    CLIENT_ID = st.secrets["TABLEAU_CLIENT_ID"]
+    SECRET_ID = st.secrets["TABLEAU_SECRET_ID"]
+    SECRET_VALUE = st.secrets["TABLEAU_SECRET_VALUE"]
+    USER_EMAIL = st.secrets["TABLEAU_USER_EMAIL"]
+
+    now = int(time.time())
+    payload = {
+        "iss": CLIENT_ID,
+        "exp": now + (10 * 60),
+        "iat": now - 60,
+        "jti": str(uuid.uuid4()),
+        "aud": "tableau",
+        "sub": USER_EMAIL,
+        "scp": ["tableau:views:embed", "tableau:views:embed_authoring"]
+    }
+
+    token = jwt.encode(
+        payload,
+        SECRET_VALUE,
+        algorithm="HS256",
+        headers={"kid": SECRET_ID, "iss": CLIENT_ID}
+    )
+    return token
+
+# --- 3. App Setup ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
-
 st.title("Intelligent Login Risk Assessment")
-st.caption("BI + DSS deployment - Isolation Forest anomaly detection with automated decisioning")
-
 
 @st.cache_resource
 def load_engine():
     return RiskEngine()
 
-
 engine = load_engine()
+RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critical": "#c62828"}
 
-RISK_COLORS = {
-    "Low": "#2e7d32",
-    "Medium": "#f9a825",
-    "High": "#ef6c00",
-    "Critical": "#c62828",
-}
+if "last_evaluated_protocol" not in st.session_state:
+    st.session_state.last_evaluated_protocol = None
 
-# --- Section Tabs ---
-# We split the simulator logic and your executive dashboard into professional tabs
+# --- 4. Tabs ---
 tab1, tab2 = st.tabs(["🔒 Interactive Risk Evaluator", "📊 System Risk Analytics & Behavioral Insights"])
 
 with tab1:
     with st.form("login_event_form"):
         st.subheader("Login Event Details")
-
         col1, col2 = st.columns(2)
         with col1:
             protocol_type = st.selectbox("Protocol type", engine.category_options["protocol_type"])
             encryption_used = st.selectbox("Encryption used", engine.category_options["encryption_used"])
             browser_type = st.selectbox("Browser type", engine.category_options["browser_type"])
-            unusual_time_access = st.selectbox("Unusual time access", ["No", "Yes"])
-
+            unusual_time_access_str = st.selectbox("Unusual time access", ["No", "Yes"])
         with col2:
             network_packet_size = st.number_input("Network packet size", min_value=0, value=500)
-            login_attempts = st.number_input("Login attempts", min_value=0, value=3)
+            login_attempts = st.number_input("Login attempts", min_value=1, value=3)
             failed_logins = st.number_input("Failed logins", min_value=0, value=1)
             session_duration = st.number_input("Session duration (seconds)", min_value=0.0, value=300.0)
-            ip_reputation_score = st.slider("IP reputation score (0 = trusted, 1 = malicious)", 0.0, 1.0, 0.3)
-
+            ip_reputation_score = st.slider("IP reputation score", 0.0, 1.0, 0.3)
         submitted = st.form_submit_button("Evaluate Login")
 
     if submitted:
+        unusual_time_val = 1 if unusual_time_access_str == "Yes" else 0
         event = {
+            "network_packet_size": network_packet_size, "protocol_type": protocol_type,
+            "login_attempts": login_attempts, "session_duration": session_duration,
+            "encryption_used": encryption_used, "ip_reputation_score": ip_reputation_score,
+            "failed_logins": failed_logins, "browser_type": browser_type,
+            "unusual_time_access": unusual_time_val,
+        }
+        st.session_state.last_evaluated_protocol = protocol_type
+        result = engine.score(event)
+
+        # Sync to Supabase
+        risk_rank_map = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
+        sync_df = pd.DataFrame([{
+            "session_id": f"LIVE_{int(time.time())}",
             "network_packet_size": network_packet_size,
             "protocol_type": protocol_type,
             "login_attempts": login_attempts,
@@ -76,83 +105,39 @@ with tab1:
             "ip_reputation_score": ip_reputation_score,
             "failed_logins": failed_logins,
             "browser_type": browser_type,
-            "unusual_time_access": 1 if unusual_time_access == "Yes" else 0,
-        }
+            "unusual_time_access": unusual_time_val,
+            "risk_score": result["risk_score"],
+            "risk_level": result["risk_level"],
+            "recommended_action": result["recommended_action"],
+            "attack_detected": 1 if result["risk_score"] >= 55 else 0,
+            "anomaly_score": round(result["risk_score"] / 100, 4),
+            "iso_flag": 1 if result["risk_score"] >= 55 else 0,
+            "attack_label": "Attack Detected" if result["risk_score"] >= 55 else "Normal",
+            "unusual_time_label": "Unusual Hours" if unusual_time_val == 1 else "Normal Hours",
+            "risk_rank": risk_rank_map.get(result["risk_level"], 1),
+            "failed_login_ratio": round(failed_logins / login_attempts, 2) if login_attempts > 0 else 0,
+            "session_duration_min": round(session_duration / 60, 2)
+        }])
+        sync_df.to_sql('login_logs', db_engine, if_exists='append', index=False)
+        st.toast("✅ Evaluation synced to Cloud Database!", icon="☁️")
 
-        try:
-            result = engine.score(event)
-        except ValueError as e:
-            st.error(str(e))
-            st.stop()
-
+        # UI Results
         color = RISK_COLORS[result["risk_level"]]
-
         st.markdown("---")
-        st.subheader("Result")
-
         m1, m2 = st.columns(2)
         m1.metric("Risk Score", f"{result['risk_score']} / 100")
-        m2.markdown(
-            f"<div style='padding:0.6em;border-radius:0.4em;background:{color};"
-            f"color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>",
-            unsafe_allow_html=True,
-        )
-
+        m2.markdown(f"<div style='padding:0.6em;border-radius:0.4em;background:{color};color:white;text-align:center;font-weight:bold;'>{result['risk_level']} Risk</div>", unsafe_allow_html=True)
         st.markdown(f"**Recommended DSS action:** {result['recommended_action']}")
-
-        if result["risk_level"] == "Low":
-            st.success("Login allowed. No further action required.")
-        elif result["risk_level"] == "Medium":
-            st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
-        elif result["risk_level"] == "High":
-            st.warning("Additional identity verification required (e.g. security questions, callback verification).")
-        else:
-            st.error("Login blocked. Security team is being notified.")
-            alert_result = send_alert(event, result)
-            if alert_result["sent"]:
-                st.info(alert_result["detail"])
-            else:
-                st.warning(alert_result["detail"])
-
-        with st.expander("Raw event + model output"):
-            st.json({"event": event, "result": result})
 
 with tab2:
     st.subheader("Live SIEM Monitoring Framework")
-    
-    # FIX: These lines are now properly indented to lock inside Tab 2
-    tableau_js_code = """
-    <div class='tableauPlaceholder' id='viz1783484224593' style='position: relative; margin: 0 auto;'>
-        <noscript>
-            <a href='#'><img alt='Overview ' src='https://public.tableau.com/static/images/BI/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview/1_rss.png' style='border: none' /></a>
-        </noscript>
-        <object class='tableauViz' style='display:none;'>
-            <param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> 
-            <param name='embed_code_version' value='3' /> 
-            <param name='site_root' value='' />
-            <param name='name' value='BIA_Cyber_Progress_v3_fixed_17834349622720/Overview' />
-            <param name='tabs' value='no' />
-            <param name='toolbar' value='yes' />
-            <param name='static_image' value='https://public.tableau.com/static/images/BI/BIA_Cyber_Progress_v3_fixed_17834349622720/Overview/1.png' /> 
-            <param name='animate_transition' value='yes' />
-            <param name='display_static_image' value='yes' />
-            <param name='display_spinner' value='yes' />
-            <param name='display_overlay' value='yes' />
-            <param name='display_count' value='yes' />
-            <param name='language' value='en-US' />
-            <param name='device' value='desktop' />
-        </object>
-    </div>
-    <script type='text/javascript'>
-        var divElement = document.getElementById('viz1783484224593');
-        var vizElement = divElement.getElementsByTagName('object')[0];
-        vizElement.style.width='1300px';
-        vizElement.style.height='850px';
-        var scriptElement = document.createElement('script');
-        scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';
-        vizElement.parentNode.insertBefore(scriptElement, vizElement);
-    </script>
-    """
-
-    # FIX: Render component safely inside Tab 2's context execution sequence
-    components.html(tableau_js_code, width=1340, height=870, scrolling=False)
+    try:
+        token = generate_tableau_token()
+        # Ensure the URL has '?:embed=yes&:token={token}' as the very first parameters
+        base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
+        embed_url = f"{base_url}?:embed=yes&:token={token}&:showVizHome=no&:toolbar=bottom&:refresh=yes"
+        
+        st.components.v1.iframe(embed_url, height=900, scrolling=True)
+        st.caption("🔒 Secured connection via Tableau Connected App (JWT)")
+    except Exception as e:
+        st.error(f"Tableau Auth Error: {e}")
