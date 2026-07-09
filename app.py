@@ -127,6 +127,21 @@ with tab1:
             # 🔄 INCREMENT REFRESH COUNTER
             st.session_state.refresh_count += 1
             st.toast("✅ Evaluation synced! Dashboard will refresh.", icon="🚀")
+            db_engine.dispose() 
+            
+            # --- ADD THIS: ROBUST TABLEAU TRIGGER ---
+            # We use a unique key based on the refresh_count so Streamlit 
+            # knows the component needs to be re-rendered.
+            st.markdown(f"""
+            <script>
+                (function() {{
+                    const viz = document.getElementById('tableau-viz');
+                    if (viz) {{
+                        viz.refreshDataAsync();
+                    }}
+                }})();
+            </script>
+            """, unsafe_allow_html=True)
             
         except Exception as e:
             st.error(f"Database error: {e}")
