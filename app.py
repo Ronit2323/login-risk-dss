@@ -11,10 +11,12 @@ import datetime
 # --- 1. Database Configuration ---
 DB_URI = st.secrets["DB_URI"]
 db_engine = create_engine(
-    st.secrets["DB_URI"], 
+    DB_URI, 
     pool_size=5, 
-    max_overflow=0, 
-    pool_pre_ping=True
+    max_overflow=2, 
+    pool_timeout=30,
+    pool_pre_ping=True,  # Crucial: checks connection health before use
+    pool_recycle=3600    # Crucial: recycles connections so they don't go "stale"
 )
 
 # --- 2. Tableau JWT Token Generation ---
