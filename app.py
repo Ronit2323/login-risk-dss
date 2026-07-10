@@ -38,49 +38,56 @@ def generate_tableau_token():
 # --- 3. APP SETUP & CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
-# Custom CSS for a "Cyber" look
 st.markdown("""
     <style>
-    /* 1. Reduce header gap to fix cut-off heading */
+    /* 1. Reduce padding to use full screen height */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 0rem !important;
+        max-width: 100% !important;
     }
     
-    /* 2. Force the sidebar to be narrower */
+    /* 2. Narrower Sidebar */
     [data-testid="stSidebar"] {
-        width: 250px !important; /* Adjust if needed */
+        width: 250px !important;
     }
     
-    /* 3. The Dashboard Container: Force it to fit */
-    div[data-testid="stIframe"] {
-        width: 100% !important;
-        height: 750px !important; /* Slightly reduced to prevent vertical scroll */
-        overflow: hidden !important;
-        margin: 0 !important;
+    /* 3. Scaling Container for the Dashboard */
+    /* This forces the 1300x800 dashboard to fit into the width of the tab */
+    .tableau-scaling-wrapper {
+        width: 100%;
+        overflow: hidden;
+    }
+    
+    .tableau-container {
+        width: 1300px;
+        height: 800px;
+        transform-origin: top left;
     }
 
-    /* 4. The Iframe: Scale slightly to prevent overflow */
-    iframe {
-        width: 100% !important;
-        height: 100% !important;
-        border: none !important;
-        overflow: hidden !important;
+    /* Auto-scale down based on screen width */
+    @media (max-width: 1400px) {
+        .tableau-container { transform: scale(0.85); }
+    }
+    @media (max-width: 1200px) {
+        .tableau-container { transform: scale(0.75); }
+    }
+    @media (max-width: 1000px) {
+        .tableau-container { transform: scale(0.65); }
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- SIDEBAR: TEAM INFO ---
-# --- SIDEBAR: TEAM INFO ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=80) # Smaller image
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=80)
 st.sidebar.title("Project HeHeHe")
 st.sidebar.info("**Topic:** Intelligent Login Risk Assessment")
 
-# Move long lists into an expander to save space
 with st.sidebar.expander("Team Members"):
     st.write("1. Somkamon Mettawiharee")
     st.write("2. Meta Puspa Maulida")
     st.write("3. Ronit Gurung")
+
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
@@ -111,24 +118,23 @@ with tab1:
                 duration = st.number_input("Duration (sec)", min_value=0.0, value=300.0)
                 ip_rep = st.slider("IP Reputation", 0.0, 1.0, 0.3)
             
-            submitted = st.form_submit_button("ANALAYZE SESSION")
+            submitted = st.form_submit_button("ANALYZE SESSION")
 
     if submitted:
-        # ML Prediction
+        unusual_time_val = 1 if unusual_time == "Yes" else 0
         event = {"network_packet_size": network_packet, "protocol_type": protocol_type,
                  "login_attempts": attempts, "session_duration": duration,
                  "encryption_used": encryption_used, "ip_reputation_score": ip_rep,
                  "failed_logins": failed, "browser_type": browser_type,
-                 "unusual_time_access": 1 if unusual_time == "Yes" else 0}
+                 "unusual_time_access": unusual_time_val}
         result = engine.score(event)
 
-        # DB Sync
         sync_df = pd.DataFrame([{
             "session_id": f"LIVE_{int(time.time())}", "network_packet_size": network_packet,
             "protocol_type": protocol_type, "login_attempts": attempts,
             "session_duration": duration, "encryption_used": encryption_used,
             "ip_reputation_score": ip_rep, "failed_logins": failed,
-            "browser_type": browser_type, "unusual_time_access": event["unusual_time_access"],
+            "browser_type": browser_type, "unusual_time_access": unusual_time_val,
             "risk_score": result["risk_score"], "risk_level": result["risk_level"],
             "recommended_action": result["recommended_action"],
             "attack_detected": 1 if result["risk_score"] >= 55 else 0,
@@ -160,12 +166,14 @@ with tab1:
             elif result["risk_level"] == "Critical": st.error("BLOCK & ALERT ADMIN")
             else: st.warning("VERIFICATION REQUIRED")
 
-    # --- ENHANCEMENT: LIVE FEED ---
     st.markdown("---")
     st.subheader("📊 Recent Command Center Activity")
-    query = "SELECT session_id, created_at, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
-    recent_data = pd.read_sql(query, db_engine)
-    st.dataframe(recent_data, use_container_width=True)
+    try:
+        query = "SELECT session_id, created_at, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
+        recent_data = pd.read_sql(query, db_engine)
+        st.dataframe(recent_data, use_container_width=True)
+    except:
+        st.info("Loading activity feed...")
 
 with tab2:
     try:
@@ -173,10 +181,32 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # We add &:toolbar=no to ensure the Tableau UI doesn't push the height
         embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # Remove scrolling=False as CSS will handle the clip
-        components.iframe(embed_url, height=800)
+        # We wrap the iframe in a scaling div to prevent scrolling
+        tableau_html = f"""
+        <style>
+            .tableau-container {{
+                width: 1300px;
+                height: 800px;
+                transform-origin: top left;
+                transform: scale(min(1, (window.innerWidth / 1350)));
+            }}
+        </style>
+        <div class="tableau-scaling-wrapper">
+            <div class="tableau-container">
+                <iframe 
+                    src="{embed_url}" 
+                    width="1300" 
+                    height="800" 
+                    style="border:none; overflow:hidden;"
+                    scrolling="no">
+                </iframe>
+            </div>
+        </div>
+        """
+        # Height 850 catches the scaled dashboard and ensures the refresh bar at bottom is visible
+        components.html(tableau_html, height=850, scrolling=False)
+        
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
