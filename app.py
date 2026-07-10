@@ -35,39 +35,39 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & "TOTAL FIT" CSS ---
+# --- 3. APP SETUP & "FULL VIEW" CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Eliminate all white space at the top */
+    /* 1. Remove all top padding and margins */
     .block-container {
         padding-top: 0rem !important;
         padding-bottom: 0rem !important;
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
         max-width: 100% !important;
     }
     
-    /* 2. Hide Streamlit decoration elements */
+    /* 2. Hide Streamlit clutter */
     header, footer { visibility: hidden !important; height: 0 !important; }
 
-    /* 3. The Dashboard Container */
+    /* 3. THE SCALING CONTAINER */
     .tableau-fixed-box {
         width: 1300px;
         height: 800px;
-        transform-origin: top center; /* Scale from the top middle */
-        /* SCALE DOWN: 0.75 makes the 800px dashboard fit in 600px of space */
-        transform: scale(0.72); 
+        transform-origin: top center; 
+        /* 0.68 is the sweet spot to fit the 800px height into 550px of screen space */
+        transform: scale(0.68); 
         margin-left: auto;
         margin-right: auto;
     }
     
-    /* Remove vertical space between tabs and dashboard */
-    div[data-testid="stExpander"] { margin-top: -20px; }
-    
-    /* Prevent container scrollbars */
-    div[data-testid="stHtml"] { overflow: hidden !important; }
+    /* Force the Streamlit HTML component to allow overflow for the scale */
+    div[data-testid="stHtml"] {
+        height: 580px !important;
+        overflow: hidden !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -80,8 +80,8 @@ with st.sidebar.expander("Team Members"):
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
-# Compact Title
-st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: -10px;'>🛡️ Intelligent Risk Command Center</h3>", unsafe_allow_html=True)
+# Simple Clean Title
+st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: -15px;'>🛡️ Intelligent Risk Command Center</h3>", unsafe_allow_html=True)
 
 engine = RiskEngine()
 RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critical": "#c62828"}
@@ -138,7 +138,7 @@ with tab1:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
             st.session_state.refresh_count += 1
-            st.toast("🚀 Dashboard Synchronized!", icon="✅")
+            st.toast("🚀 Sync Success!", icon="✅")
         except Exception as e:
             st.error(f"DB Error: {e}")
 
@@ -154,12 +154,11 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
+        # ADDED &:tabs=no to remove the row of tabs at the top of the dashboard
+        embed_url = f"{base_url}?:embed=true&:tabs=no&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # We wrap the iframe in a box and SCALE IT DOWN to 72%
-        # This forces the 800px height dashboard to fit in roughly 580px of screen height
         tableau_html = f"""
-        <div style="display: flex; justify-content: center; width: 100%;">
+        <div style="display: flex; justify-content: center; width: 100%; height: 550px; overflow: hidden;">
             <div class="tableau-fixed-box">
                 <iframe 
                     src="{embed_url}" 
@@ -171,8 +170,8 @@ with tab2:
             </div>
         </div>
         """
-        # We set the component height to 600 so it fits on a laptop screen without scrolling
-        components.html(tableau_html, height=600, scrolling=False)
+        # Height 580 fits the scaled 800px dashboard (800 * 0.68 = 544px)
+        components.html(tableau_html, height=580, scrolling=False)
         
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
