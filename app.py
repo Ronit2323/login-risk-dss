@@ -35,55 +35,47 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & CSS ---
+# --- 3. APP SETUP & "FORCE FIT" CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Reduce padding to use full screen height */
+    /* 1. REMOVE ALL MARGINS - Use 100% of the browser width */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 0rem !important;
         padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
         max-width: 100% !important;
     }
     
-    /* 2. Narrower Sidebar */
-    [data-testid="stSidebar"] {
-        width: 250px !important;
+    /* 2. Hide the Streamlit Header and Footer to save height */
+    header, footer {
+        visibility: hidden !important;
+        height: 0 !important;
     }
-    
-    /* 3. Scaling Container for the Dashboard */
-    /* This forces the 1300x800 dashboard to fit into the width of the tab */
-    .tableau-scaling-wrapper {
-        width: 100%;
-        overflow: hidden;
-    }
-    
-    .tableau-container {
+
+    /* 3. The Scaling Logic */
+    /* We wrap the dashboard in a box that is exactly 1300x800 */
+    .tableau-fixed-box {
         width: 1300px;
         height: 800px;
         transform-origin: top left;
+        /* This magic line shrinks the 1300px box to fit your actual screen width */
+        transform: scale(calc(100vw / 1350)); 
     }
-
-    /* Auto-scale down based on screen width */
-    @media (max-width: 1400px) {
-        .tableau-container { transform: scale(0.85); }
-    }
-    @media (max-width: 1200px) {
-        .tableau-container { transform: scale(0.75); }
-    }
-    @media (max-width: 1000px) {
-        .tableau-container { transform: scale(0.65); }
+    
+    /* Ensure the container doesn't show scrollbars */
+    div[data-testid="stHtml"] {
+        overflow: hidden !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR: TEAM INFO ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=80)
+# --- SIDEBAR ---
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=60)
 st.sidebar.title("Project HeHeHe")
-st.sidebar.info("**Topic:** Intelligent Login Risk Assessment")
-
-with st.sidebar.expander("Team Members"):
+with st.sidebar.expander("Team Members", expanded=False):
     st.write("1. Somkamon Mettawiharee")
     st.write("2. Meta Puspa Maulida")
     st.write("3. Ronit Gurung")
@@ -91,8 +83,8 @@ with st.sidebar.expander("Team Members"):
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
-st.title("🛡️ Intelligent Login Risk Command Center")
-st.caption("A Decision Support System for Behavior-Based Risk Analytics")
+# Reduced title size to save vertical space
+st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🛡️ Login Risk Command Center</h2>", unsafe_allow_html=True)
 
 engine = RiskEngine()
 RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critical": "#c62828"}
@@ -101,10 +93,9 @@ tab1, tab2 = st.tabs(["🔒 Manual Risk Evaluator", "📊 Live System Analytics"
 
 with tab1:
     col_l, col_r = st.columns([2, 1])
-    
     with col_l:
         with st.form("login_event_form"):
-            st.subheader("Login Session Context")
+            st.subheader("Session Context")
             c1, c2 = st.columns(2)
             with c1:
                 protocol_type = st.selectbox("Protocol", engine.category_options["protocol_type"])
@@ -117,7 +108,6 @@ with tab1:
                 failed = st.number_input("Failed Logins", min_value=0, value=1)
                 duration = st.number_input("Duration (sec)", min_value=0.0, value=300.0)
                 ip_rep = st.slider("IP Reputation", 0.0, 1.0, 0.3)
-            
             submitted = st.form_submit_button("ANALYZE SESSION")
 
     if submitted:
@@ -156,24 +146,18 @@ with tab1:
             st.error(f"DB Error: {e}")
 
         with col_r:
-            st.subheader("Decision Output")
             color = RISK_COLORS[result["risk_level"]]
-            st.metric("Risk Index", f"{result['risk_score']} / 100")
+            st.metric("Risk Index", f"{result['risk_score']}%")
             st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
             st.markdown(f"**Action:** `{result['recommended_action']}`")
-            
-            if result["risk_level"] == "Low": st.success("LOGIN ALLOWED")
-            elif result["risk_level"] == "Critical": st.error("BLOCK & ALERT ADMIN")
-            else: st.warning("VERIFICATION REQUIRED")
 
-    st.markdown("---")
-    st.subheader("📊 Recent Command Center Activity")
+    st.subheader("📊 Recent Activity")
     try:
-        query = "SELECT session_id, created_at, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
+        query = "SELECT created_at, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 3"
         recent_data = pd.read_sql(query, db_engine)
         st.dataframe(recent_data, use_container_width=True)
     except:
-        st.info("Loading activity feed...")
+        st.write("Connecting to feed...")
 
 with tab2:
     try:
@@ -181,32 +165,23 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
+        # We ensure :toolbar=no to keep the height strictly at 800px
         embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # We wrap the iframe in a scaling div to prevent scrolling
+        # THE HTML WRAPPER: This forces the 1300x800 to fit your specific screen width
         tableau_html = f"""
-        <style>
-            .tableau-container {{
-                width: 1300px;
-                height: 800px;
-                transform-origin: top left;
-                transform: scale(min(1, (window.innerWidth / 1350)));
-            }}
-        </style>
-        <div class="tableau-scaling-wrapper">
-            <div class="tableau-container">
-                <iframe 
-                    src="{embed_url}" 
-                    width="1300" 
-                    height="800" 
-                    style="border:none; overflow:hidden;"
-                    scrolling="no">
-                </iframe>
-            </div>
+        <div class="tableau-fixed-box">
+            <iframe 
+                src="{embed_url}" 
+                width="1300" 
+                height="800" 
+                style="border:none;"
+                scrolling="no">
+            </iframe>
         </div>
         """
-        # Height 850 catches the scaled dashboard and ensures the refresh bar at bottom is visible
-        components.html(tableau_html, height=850, scrolling=False)
+        # Height 820 is enough to show the scaled dashboard + a tiny bit of padding
+        components.html(tableau_html, height=820, scrolling=False)
         
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
