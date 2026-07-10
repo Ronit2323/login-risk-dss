@@ -35,53 +35,53 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & "FULL VIEW" CSS ---
+# --- 3. APP SETUP & CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Remove all top padding and margins */
+    /* 1. Reset padding but ALLOW normal browser scrolling */
     .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: 100% !important;
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 95% !important;
     }
     
-    /* 2. Hide Streamlit clutter */
-    header, footer { visibility: hidden !important; height: 0 !important; }
-
-    /* 3. THE SCALING CONTAINER */
+    /* 2. Style for the Dashboard Container */
     .tableau-fixed-box {
         width: 1300px;
-        height: 800px;
-        transform-origin: top center; 
-        /* 0.68 is the sweet spot to fit the 800px height into 550px of screen space */
-        transform: scale(0.68); 
-        margin-left: auto;
-        margin-right: auto;
+        height: 850px; /* Increased slightly to ensure bottom is not clipped */
+        transform-origin: top left;
+        /* Scale based on width to prevent horizontal scroll */
+        transform: scale(0.78); 
+        margin-bottom: -150px; /* Offset the empty space created by scaling */
     }
     
-    /* Force the Streamlit HTML component to allow overflow for the scale */
+    /* Ensure the Streamlit container allows the scaled content to show */
     div[data-testid="stHtml"] {
-        height: 580px !important;
-        overflow: hidden !important;
+        overflow: visible !important;
+    }
+
+    /* Professional Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=50)
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=60)
 st.sidebar.title("Project HeHeHe")
-with st.sidebar.expander("Team Members"):
-    st.write("Somkamon • Meta • Ronit")
+st.sidebar.info("**Topic:** Intelligent Login Risk Assessment")
+with st.sidebar.expander("Team Members", expanded=True):
+    st.write("• Somkamon Mettawiharee")
+    st.write("• Meta Puspa Maulida")
+    st.write("• Ronit Gurung")
 
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
-# Simple Clean Title
-st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: -15px;'>🛡️ Intelligent Risk Command Center</h3>", unsafe_allow_html=True)
+st.title("🛡️ Intelligent Login Risk Command Center")
 
 engine = RiskEngine()
 RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critical": "#c62828"}
@@ -138,15 +138,28 @@ with tab1:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
             st.session_state.refresh_count += 1
-            st.toast("🚀 Sync Success!", icon="✅")
+            st.toast("🚀 Database Updated!", icon="✅")
         except Exception as e:
             st.error(f"DB Error: {e}")
 
         with col_r:
+            st.subheader("Decision Output")
             color = RISK_COLORS[result["risk_level"]]
             st.metric("Risk Index", f"{result['risk_score']}%")
             st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
             st.markdown(f"**Action:** `{result['recommended_action']}`")
+            
+            if result["risk_level"] == "Low": st.success("LOGIN ALLOWED")
+            else: st.warning("VERIFICATION REQUIRED")
+
+    st.markdown("---")
+    st.subheader("📊 Recent System Activity")
+    try:
+        query = "SELECT created_at, session_id, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
+        recent_data = pd.read_sql(query, db_engine)
+        st.dataframe(recent_data, use_container_width=True)
+    except:
+        st.info("Awaiting telemetry...")
 
 with tab2:
     try:
@@ -154,24 +167,22 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # ADDED &:tabs=no to remove the row of tabs at the top of the dashboard
-        embed_url = f"{base_url}?:embed=true&:tabs=no&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
+        # Build URL with force-refresh and no tabs
+        embed_url = f"{base_url}?:embed=yes&:tabs=no&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
         tableau_html = f"""
-        <div style="display: flex; justify-content: center; width: 100%; height: 550px; overflow: hidden;">
-            <div class="tableau-fixed-box">
-                <iframe 
-                    src="{embed_url}" 
-                    width="1300" 
-                    height="800" 
-                    style="border:none;"
-                    scrolling="no">
-                </iframe>
-            </div>
+        <div class="tableau-fixed-box">
+            <iframe 
+                src="{embed_url}" 
+                width="1300" 
+                height="850" 
+                style="border:none;"
+                scrolling="no">
+            </iframe>
         </div>
         """
-        # Height 580 fits the scaled 800px dashboard (800 * 0.68 = 544px)
-        components.html(tableau_html, height=580, scrolling=False)
+        # Height 700 gives plenty of room for the 0.78 scaled dashboard (850 * 0.78 = 663px)
+        components.html(tableau_html, height=700, scrolling=False)
         
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
