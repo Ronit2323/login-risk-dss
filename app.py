@@ -41,34 +41,31 @@ st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 # Custom CSS for a "Cyber" look
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    
-    /* Metrics Fix */
-    [data-testid="stMetricValue"] { color: #ffffff !important; }
-    [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
-    .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
-    
-    /* Sidebar and Buttons */
-    [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
-    .stButton>button { width: 100%; background-color: #2563eb; color: white; border-radius: 5px; }
-
-    /* Fix for Scrollbar: Hide overflow on the container */
-    div[data-testid="stIframe"] {
-        overflow: hidden !important;
-        width: 100% !important;
+    /* Remove default Streamlit padding from the main container */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 95% !important; /* Forces the container to use 95% of screen width */
     }
     
-    /* Force scaling to fit 1300x800 into the viewport */
-    iframe {
-        transform-origin: top left;
-        transform: scale(0.9); 
-        width: 111.11%; /* (1/0.9) * 100 to perfectly fill width */
-        height: 888px;  /* (800/0.9) to maintain aspect ratio after scaling */
+    /* Fix for the iframe container */
+    div[data-testid="stIframe"] {
+        width: 100% !important;
         overflow: hidden !important;
+        margin: 0 !important;
+    }
+
+    /* Force the iframe itself to be fully visible */
+    iframe {
+        width: 100% !important;
+        height: 800px !important;
         border: none !important;
+        overflow: hidden !important;
     }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- SIDEBAR: TEAM INFO ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=100)
