@@ -33,27 +33,26 @@ def generate_tableau_token():
         "sub": st.secrets["TABLEAU_USER_EMAIL"],
         "scp": ["tableau:views:embed", "tableau:views:embed_authoring"]
     }
-    return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
-                      headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
+    return jwt.encode(
+        payload, 
+        st.secrets["TABLEAU_SECRET_VALUE"], 
+        algorithm="HS256", 
+        headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]}
+    )
 
-# --- 3. APP SETUP & SCROLL-READY CSS ---
+# --- 3. APP SETUP & CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Use the full browser width */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 5rem !important;
         max-width: 98% !important;
     }
-    
-    /* 2. ALLOW normal browser scrolling for the whole page */
     .main {
         overflow: auto !important;
     }
-
-    /* 3. Style the sidebar to look clean */
     [data-testid="stSidebar"] {
         background-color: #f8fafc;
         border-right: 1px solid #e2e8f0;
@@ -106,6 +105,7 @@ with tab1:
                  "encryption_used": encryption_used, "ip_reputation_score": ip_rep,
                  "failed_logins": failed, "browser_type": browser_type,
                  "unusual_time_access": unusual_time_val}
+        
         result = engine.score(event)
 
         sync_df = pd.DataFrame([{
@@ -126,6 +126,7 @@ with tab1:
             "session_duration_min": round(duration / 60, 2)
         }])
 
+        # --- SYNC TO DATABASE ---
         try:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
@@ -134,41 +135,35 @@ with tab1:
         except Exception as e:
             st.error(f"DB Error: {e}")
 
-            with col_r:
-                st.subheader("Decision Output")
+        # --- DECISION OUTPUT (col_r) ---
+        with col_r:
+            st.subheader("Decision Output")
+            color = RISK_COLORS[result["risk_level"]]
+            st.metric("Risk Index", f"{result['risk_score']}%")
+            
+            st.markdown(
+                f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>",
+                unsafe_allow_html=True
+            )
 
-                color = RISK_COLORS[result["risk_level"]]
+            st.markdown(f"**Action:** `{result['recommended_action']}`")
 
-                st.metric("Risk Index", f"{result['risk_score']}%")
-
-                st.markdown(
-                    f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>",
-                    unsafe_allow_html=True
-                )
-
-                st.markdown(f"**Action:** `{result['recommended_action']}`")
-
-                if result["risk_level"] == "Low":
-                    st.success("Login allowed. No further action required.")
-
-                elif result["risk_level"] == "Medium":
-                    st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
-
-                elif result["risk_level"] == "High":
-                    st.warning("Additional identity verification required.")
-
+            if result["risk_level"] == "Low":
+                st.success("Login allowed. No further action required.")
+            elif result["risk_level"] == "Medium":
+                st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
+            elif result["risk_level"] == "High":
+                st.warning("Additional identity verification required.")
+            else:
+                st.error("🚨 Login blocked. Security team is being notified.")
+                # --- AUTOMATED CRITICAL ALERT ---
+                alert_result = send_alert(event, result)
+                if alert_result["sent"]:
+                    st.success(alert_result["detail"])
                 else:
-                    st.error("Login blocked. Security team is being notified.")
+                    st.warning(alert_result["detail"])
 
-                    alert_result = send_alert(event, result)
-
-                    if alert_result["sent"]:
-                        st.success(alert_result["detail"])
-                    else:
-                        st.warning(alert_result["detail"])
-
-       
-    # --- HISTORY SECTION ---
+    # --- HISTORY SECTION (Always visible in Tab 1) ---
     st.markdown("---")
     st.subheader("📊 Recent System Activity")
     try:
@@ -184,13 +179,9 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # Build the final URL (1300px wide, 800px high)
-        # :toolbar=yes allows you to use the refresh/undo buttons in Tableau
+        # Build the final URL (1300px wide)
         embed_url = f"{base_url}?:embed=yes&:tabs=no&:toolbar=yes&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # We set the iframe to your EXACT dashboard size
-        # This will create a horizontal scrollbar if the user's screen is too small, 
-        # but the dashboard itself will be 100% visible and un-clipped.
         st.components.v1.iframe(embed_url, width=1300, height=850, scrolling=True)
         
     except Exception as e:
