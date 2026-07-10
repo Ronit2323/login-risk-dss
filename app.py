@@ -41,23 +41,21 @@ st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 # Custom CSS for a "Cyber" look
 st.markdown("""
     <style>
-    /* Remove default Streamlit padding from the main container */
+    /* 1. Force the main Streamlit container to be as wide as possible */
     .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: 95% !important; /* Forces the container to use 95% of screen width */
+        padding: 0rem 1rem 1rem 1rem !important;
+        max-width: 100% !important;
     }
     
-    /* Fix for the iframe container */
+    /* 2. Target the iframe specifically to stop it from pushing boundaries */
     div[data-testid="stIframe"] {
         width: 100% !important;
-        overflow: hidden !important;
+        height: 800px !important;
+        overflow: hidden !important; /* This is the key: it cuts off extra pixels */
         margin: 0 !important;
     }
 
-    /* Force the iframe itself to be fully visible */
+    /* 3. Ensure the iframe inside behaves and doesn't scroll */
     iframe {
         width: 100% !important;
         height: 800px !important;
@@ -65,7 +63,7 @@ st.markdown("""
         overflow: hidden !important;
     }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # --- SIDEBAR: TEAM INFO ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=100)
@@ -168,9 +166,11 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
-        # Keep dimensions matching your Tableau design (1300x800)
+        
+        # We add &:toolbar=no to ensure the Tableau UI doesn't push the height
         embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        components.iframe(embed_url, width=1300, height=800, scrolling=False)
+        # Remove scrolling=False as CSS will handle the clip
+        components.iframe(embed_url, height=800)
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
