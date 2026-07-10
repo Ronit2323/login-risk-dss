@@ -49,6 +49,18 @@ st.markdown("""
     .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
     [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     .stButton>button { width: 100%; background-color: #2563eb; color: white; border-radius: 5px; }
+            /* This forces the iframe container to maintain aspect ratio and fit the screen */
+    .stIframe {
+        width: 100% !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+    }
+    /* Optional: If you want to force scale-down even if the screen is small */
+    iframe {
+        transform-origin: top left;
+        transform: scale(0.9); /* Adjust this value (0.8 - 0.95) to fit your screen */
+        width: 111%; /* Compensate for the scale down */
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -155,6 +167,6 @@ with tab2:
         rid = st.session_state.refresh_count
         # Adding &:toolbar=no will save vertical space and help prevent scrollbars
         embed_url = f"{base_url}?:embed=true&:toolbar=no&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
-        components.iframe(embed_url, width=1300, height=805, scrolling=False)
+        components.iframe(embed_url, width=1300, height=800, scrolling=False)
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
