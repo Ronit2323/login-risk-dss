@@ -41,24 +41,29 @@ st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 # Custom CSS for a "Cyber" look
 st.markdown("""
     <style>
-    /* 1. Force the main Streamlit container to be as wide as possible */
+    /* 1. Reduce header gap to fix cut-off heading */
     .block-container {
-        padding: 0rem 1rem 1rem 1rem !important;
-        max-width: 100% !important;
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
     }
     
-    /* 2. Target the iframe specifically to stop it from pushing boundaries */
+    /* 2. Force the sidebar to be narrower */
+    [data-testid="stSidebar"] {
+        width: 250px !important; /* Adjust if needed */
+    }
+    
+    /* 3. The Dashboard Container: Force it to fit */
     div[data-testid="stIframe"] {
         width: 100% !important;
-        height: 800px !important;
-        overflow: hidden !important; /* This is the key: it cuts off extra pixels */
+        height: 750px !important; /* Slightly reduced to prevent vertical scroll */
+        overflow: hidden !important;
         margin: 0 !important;
     }
 
-    /* 3. Ensure the iframe inside behaves and doesn't scroll */
+    /* 4. The Iframe: Scale slightly to prevent overflow */
     iframe {
         width: 100% !important;
-        height: 800px !important;
+        height: 100% !important;
         border: none !important;
         overflow: hidden !important;
     }
@@ -66,15 +71,16 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- SIDEBAR: TEAM INFO ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=100)
+# --- SIDEBAR: TEAM INFO ---
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=80) # Smaller image
 st.sidebar.title("Project HeHeHe")
 st.sidebar.info("**Topic:** Intelligent Login Risk Assessment")
-st.sidebar.markdown("---")
-st.sidebar.subheader("Team Members")
-st.sidebar.write("1. Somkamon Mettawiharee")
-st.sidebar.write("2. Meta Puspa Maulida")
-st.sidebar.write("3. Ronit Gurung")
 
+# Move long lists into an expander to save space
+with st.sidebar.expander("Team Members"):
+    st.write("1. Somkamon Mettawiharee")
+    st.write("2. Meta Puspa Maulida")
+    st.write("3. Ronit Gurung")
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
