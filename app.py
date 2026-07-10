@@ -42,6 +42,10 @@ st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
+    /* Fix for the metric text color */
+    [data-testid="stMetricValue"] { color: #ffffff !important; }
+    [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
+    
     .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
     [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     .stButton>button { width: 100%; background-color: #2563eb; color: white; border-radius: 5px; }
@@ -149,7 +153,8 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
-        embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
-        components.iframe(embed_url, width=1300, height=800, scrolling=False)
+        # Adding &:toolbar=no will save vertical space and help prevent scrollbars
+        embed_url = f"{base_url}?:embed=true&:toolbar=no&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
+        components.iframe(embed_url, width=1300, height=805, scrolling=False)
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
