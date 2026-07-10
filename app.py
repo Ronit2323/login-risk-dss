@@ -35,56 +35,53 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & "FORCE FIT" CSS ---
+# --- 3. APP SETUP & "TOTAL FIT" CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. REMOVE ALL MARGINS - Use 100% of the browser width */
+    /* 1. Eliminate all white space at the top */
     .block-container {
         padding-top: 0rem !important;
         padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
         max-width: 100% !important;
     }
     
-    /* 2. Hide the Streamlit Header and Footer to save height */
-    header, footer {
-        visibility: hidden !important;
-        height: 0 !important;
-    }
+    /* 2. Hide Streamlit decoration elements */
+    header, footer { visibility: hidden !important; height: 0 !important; }
 
-    /* 3. The Scaling Logic */
-    /* We wrap the dashboard in a box that is exactly 1300x800 */
+    /* 3. The Dashboard Container */
     .tableau-fixed-box {
         width: 1300px;
         height: 800px;
-        transform-origin: top left;
-        /* This magic line shrinks the 1300px box to fit your actual screen width */
-        transform: scale(calc(100vw / 1350)); 
+        transform-origin: top center; /* Scale from the top middle */
+        /* SCALE DOWN: 0.75 makes the 800px dashboard fit in 600px of space */
+        transform: scale(0.72); 
+        margin-left: auto;
+        margin-right: auto;
     }
     
-    /* Ensure the container doesn't show scrollbars */
-    div[data-testid="stHtml"] {
-        overflow: hidden !important;
-    }
+    /* Remove vertical space between tabs and dashboard */
+    div[data-testid="stExpander"] { margin-top: -20px; }
+    
+    /* Prevent container scrollbars */
+    div[data-testid="stHtml"] { overflow: hidden !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- SIDEBAR ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=60)
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=50)
 st.sidebar.title("Project HeHeHe")
-with st.sidebar.expander("Team Members", expanded=False):
-    st.write("1. Somkamon Mettawiharee")
-    st.write("2. Meta Puspa Maulida")
-    st.write("3. Ronit Gurung")
+with st.sidebar.expander("Team Members"):
+    st.write("Somkamon • Meta • Ronit")
 
 if "refresh_count" not in st.session_state:
     st.session_state.refresh_count = 0
 
-# Reduced title size to save vertical space
-st.markdown("<h2 style='text-align: center; margin-bottom: 0;'>🛡️ Login Risk Command Center</h2>", unsafe_allow_html=True)
+# Compact Title
+st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: -10px;'>🛡️ Intelligent Risk Command Center</h3>", unsafe_allow_html=True)
 
 engine = RiskEngine()
 RISK_COLORS = {"Low": "#2e7d32", "Medium": "#f9a825", "High": "#ef6c00", "Critical": "#c62828"}
@@ -141,7 +138,7 @@ with tab1:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
             st.session_state.refresh_count += 1
-            st.toast("🚀 Database Updated!", icon="✅")
+            st.toast("🚀 Dashboard Synchronized!", icon="✅")
         except Exception as e:
             st.error(f"DB Error: {e}")
 
@@ -151,37 +148,31 @@ with tab1:
             st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
             st.markdown(f"**Action:** `{result['recommended_action']}`")
 
-    st.subheader("📊 Recent Activity")
-    try:
-        query = "SELECT created_at, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 3"
-        recent_data = pd.read_sql(query, db_engine)
-        st.dataframe(recent_data, use_container_width=True)
-    except:
-        st.write("Connecting to feed...")
-
 with tab2:
     try:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # We ensure :toolbar=no to keep the height strictly at 800px
         embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # THE HTML WRAPPER: This forces the 1300x800 to fit your specific screen width
+        # We wrap the iframe in a box and SCALE IT DOWN to 72%
+        # This forces the 800px height dashboard to fit in roughly 580px of screen height
         tableau_html = f"""
-        <div class="tableau-fixed-box">
-            <iframe 
-                src="{embed_url}" 
-                width="1300" 
-                height="800" 
-                style="border:none;"
-                scrolling="no">
-            </iframe>
+        <div style="display: flex; justify-content: center; width: 100%;">
+            <div class="tableau-fixed-box">
+                <iframe 
+                    src="{embed_url}" 
+                    width="1300" 
+                    height="800" 
+                    style="border:none;"
+                    scrolling="no">
+                </iframe>
+            </div>
         </div>
         """
-        # Height 820 is enough to show the scaled dashboard + a tiny bit of padding
-        components.html(tableau_html, height=820, scrolling=False)
+        # We set the component height to 600 so it fits on a laptop screen without scrolling
+        components.html(tableau_html, height=600, scrolling=False)
         
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
