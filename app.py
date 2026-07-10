@@ -35,38 +35,41 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & "SMART FIT" CSS ---
+# --- 3. APP SETUP & SCROLL-FRIENDLY CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Use maximum browser width */
+    /* 1. Reset padding to use more screen space */
     .block-container {
         padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
+        padding-bottom: 5rem !important;
         max-width: 98% !important;
     }
     
-    /* 2. Style the Dashboard Container for 'Object-Fit' behavior */
-    .dashboard-wrapper {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        overflow: hidden;
-    }
+    /* 2. Professional Sidebar Styling */
+    [data-testid="stSidebar"] { background-color: #f0f2f6; }
 
-    .tableau-scaling-container {
+    /* 3. Allow main window to scroll for Tab 1 History */
+    .main { overflow: auto !important; }
+
+    /* 4. THE DASHBOARD FITTER */
+    .tableau-box {
         width: 1300px;
         height: 800px;
         transform-origin: top left;
-        /* SCALE: 0.65 shrinks the 800px height to ~520px so it fits the screen height */
-        transform: scale(0.65); 
-        margin-bottom: -280px; /* Removes the empty gap created by scaling */
+        /* SCALE DOWN to 0.62 so 800px fits in ~500px height */
+        transform: scale(0.62); 
+        border: none;
     }
-
-    /* 3. Allow Tab 1 to scroll naturally for history */
-    [data-testid="stVerticalBlock"] {
-        overflow: visible !important;
+    
+    /* Container to hide the overflow of the scaled dashboard */
+    .outer-container {
+        width: 100%;
+        height: 520px; /* This is 800 * 0.62 plus a little buffer */
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -139,21 +142,22 @@ with tab1:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
             st.session_state.refresh_count += 1
-            st.toast("🚀 Database Updated!", icon="✅")
+            st.toast("🚀 Database Synced!", icon="✅")
         except Exception as e:
             st.error(f"DB Error: {e}")
 
         with col_r:
+            st.subheader("Decision Output")
             color = RISK_COLORS[result["risk_level"]]
             st.metric("Risk Index", f"{result['risk_score']}%")
             st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
             st.markdown(f"**Action:** `{result['recommended_action']}`")
 
-    # HISTORY IS NOW SCROLLABLE IN TAB 1
+    # --- HISTORY SECTION (Now scrollable) ---
     st.markdown("---")
     st.subheader("📊 Recent System Activity")
     try:
-        query = "SELECT created_at, session_id, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 10"
+        query = "SELECT created_at, session_id, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
         recent_data = pd.read_sql(query, db_engine)
         st.dataframe(recent_data, use_container_width=True)
     except:
@@ -165,24 +169,20 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # Build URL - We remove tabs to save vertical space
+        # Build URL with no tabs and no toolbar
         embed_url = f"{base_url}?:embed=yes&:tabs=no&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # SMART FIT WRAPPER
+        # We wrap the iframe in a shrinking container
         tableau_html = f"""
-        <div class="dashboard-wrapper">
-            <div class="tableau-scaling-container">
-                <iframe 
-                    src="{embed_url}" 
-                    width="1300" 
-                    height="800" 
-                    style="border:none;"
-                    scrolling="no">
-                </iframe>
-            </div>
+        <div class="outer-container">
+            <iframe 
+                class="tableau-box"
+                src="{embed_url}" 
+                scrolling="no">
+            </iframe>
         </div>
         """
-        # Height 550 ensures the scaled dashboard (800 * 0.65 = 520px) is fully visible
+        # Height 550 ensures the 800px dashboard (shrunk to 496px) fits completely
         components.html(tableau_html, height=550, scrolling=False)
         
     except Exception as e:
