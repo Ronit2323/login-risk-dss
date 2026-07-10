@@ -42,24 +42,30 @@ st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    /* Fix for the metric text color */
+    
+    /* Metrics Fix */
     [data-testid="stMetricValue"] { color: #ffffff !important; }
     [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
-    
     .stMetric { background-color: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
+    
+    /* Sidebar and Buttons */
     [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     .stButton>button { width: 100%; background-color: #2563eb; color: white; border-radius: 5px; }
-            /* This forces the iframe container to maintain aspect ratio and fit the screen */
-    .stIframe {
-        width: 100% !important;
-        height: 100vh !important;
+
+    /* Fix for Scrollbar: Hide overflow on the container */
+    div[data-testid="stIframe"] {
         overflow: hidden !important;
+        width: 100% !important;
     }
-    /* Optional: If you want to force scale-down even if the screen is small */
+    
+    /* Force scaling to fit 1300x800 into the viewport */
     iframe {
         transform-origin: top left;
-        transform: scale(0.9); /* Adjust this value (0.8 - 0.95) to fit your screen */
-        width: 111%; /* Compensate for the scale down */
+        transform: scale(0.9); 
+        width: 111.11%; /* (1/0.9) * 100 to perfectly fill width */
+        height: 888px;  /* (800/0.9) to maintain aspect ratio after scaling */
+        overflow: hidden !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -165,8 +171,9 @@ with tab2:
         token = generate_tableau_token()
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
-        # Adding &:toolbar=no will save vertical space and help prevent scrollbars
-        embed_url = f"{base_url}?:embed=true&:toolbar=no&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
+        # Keep dimensions matching your Tableau design (1300x800)
+        embed_url = f"{base_url}?:embed=true&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
+        
         components.iframe(embed_url, width=1300, height=800, scrolling=False)
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
