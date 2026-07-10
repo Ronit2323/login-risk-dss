@@ -35,41 +35,27 @@ def generate_tableau_token():
     return jwt.encode(payload, st.secrets["TABLEAU_SECRET_VALUE"], algorithm="HS256", 
                       headers={"kid": st.secrets["TABLEAU_SECRET_ID"], "iss": st.secrets["TABLEAU_CLIENT_ID"]})
 
-# --- 3. APP SETUP & SCROLL-FRIENDLY CSS ---
+# --- 3. APP SETUP & SCROLL-READY CSS ---
 st.set_page_config(page_title="Login Risk DSS", page_icon="🔐", layout="wide")
 
 st.markdown("""
     <style>
-    /* 1. Reset padding to use more screen space */
+    /* 1. Use the full browser width */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 5rem !important;
         max-width: 98% !important;
     }
     
-    /* 2. Professional Sidebar Styling */
-    [data-testid="stSidebar"] { background-color: #f0f2f6; }
-
-    /* 3. Allow main window to scroll for Tab 1 History */
-    .main { overflow: auto !important; }
-
-    /* 4. THE DASHBOARD FITTER */
-    .tableau-box {
-        width: 1300px;
-        height: 800px;
-        transform-origin: top left;
-        /* SCALE DOWN to 0.62 so 800px fits in ~500px height */
-        transform: scale(0.62); 
-        border: none;
+    /* 2. ALLOW normal browser scrolling for the whole page */
+    .main {
+        overflow: auto !important;
     }
-    
-    /* Container to hide the overflow of the scaled dashboard */
-    .outer-container {
-        width: 100%;
-        height: 520px; /* This is 800 * 0.62 plus a little buffer */
-        overflow: hidden;
-        display: flex;
-        justify-content: center;
+
+    /* 3. Style the sidebar to look clean */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc;
+        border-right: 1px solid #e2e8f0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -77,6 +63,7 @@ st.markdown("""
 # --- SIDEBAR ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2092/2092663.png", width=60)
 st.sidebar.title("Project HeHeHe")
+st.sidebar.info("**Topic:** Intelligent Login Risk Assessment")
 with st.sidebar.expander("Team Members", expanded=True):
     st.write("• Somkamon Mettawiharee")
     st.write("• Meta Puspa Maulida")
@@ -142,7 +129,7 @@ with tab1:
             with db_engine.begin() as conn:
                 sync_df.to_sql('login_logs', con=conn, if_exists='append', index=False)
             st.session_state.refresh_count += 1
-            st.toast("🚀 Database Synced!", icon="✅")
+            st.toast("🚀 Database Updated!", icon="✅")
         except Exception as e:
             st.error(f"DB Error: {e}")
 
@@ -153,11 +140,11 @@ with tab1:
             st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
             st.markdown(f"**Action:** `{result['recommended_action']}`")
 
-    # --- HISTORY SECTION (Now scrollable) ---
+    # --- HISTORY SECTION ---
     st.markdown("---")
     st.subheader("📊 Recent System Activity")
     try:
-        query = "SELECT created_at, session_id, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 5"
+        query = "SELECT created_at, session_id, protocol_type, risk_level, risk_score FROM login_logs ORDER BY created_at DESC LIMIT 10"
         recent_data = pd.read_sql(query, db_engine)
         st.dataframe(recent_data, use_container_width=True)
     except:
@@ -169,21 +156,14 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         
-        # Build URL with no tabs and no toolbar
-        embed_url = f"{base_url}?:embed=yes&:tabs=no&:toolbar=no&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
+        # Build the final URL (1300px wide, 800px high)
+        # :toolbar=yes allows you to use the refresh/undo buttons in Tableau
+        embed_url = f"{base_url}?:embed=yes&:tabs=no&:toolbar=yes&:showVizHome=no&:token={token}&:refresh=yes&refresh_id={rid}"
         
-        # We wrap the iframe in a shrinking container
-        tableau_html = f"""
-        <div class="outer-container">
-            <iframe 
-                class="tableau-box"
-                src="{embed_url}" 
-                scrolling="no">
-            </iframe>
-        </div>
-        """
-        # Height 550 ensures the 800px dashboard (shrunk to 496px) fits completely
-        components.html(tableau_html, height=550, scrolling=False)
+        # We set the iframe to your EXACT dashboard size
+        # This will create a horizontal scrollbar if the user's screen is too small, 
+        # but the dashboard itself will be 100% visible and un-clipped.
+        st.components.v1.iframe(embed_url, width=1300, height=850, scrolling=True)
         
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
