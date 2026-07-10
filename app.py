@@ -150,6 +150,6 @@ with tab2:
         base_url = "https://10ax.online.tableau.com/t/loginriskproject/views/BIA_Live_Risk_Assessment/Overview"
         rid = st.session_state.refresh_count
         embed_url = f"{base_url}?:embed=yes&:token={token}&:refresh=yes&refresh_id={rid}&:showVizHome=no"
-        components.iframe(embed_url, height=850, scrolling=True)
+        components.iframe(embed_url, width=1300, height=800, scrolling=False)
     except Exception as e:
         st.error(f"Tableau Connection Error: {e}")
