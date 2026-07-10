@@ -7,6 +7,7 @@ import time
 import jwt
 import uuid
 import datetime
+from alert import send_alert
 
 # --- 1. DATABASE CONFIGURATION ---
 @st.cache_resource
@@ -133,13 +134,40 @@ with tab1:
         except Exception as e:
             st.error(f"DB Error: {e}")
 
-        with col_r:
-            st.subheader("Decision Output")
-            color = RISK_COLORS[result["risk_level"]]
-            st.metric("Risk Index", f"{result['risk_score']}%")
-            st.markdown(f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>", unsafe_allow_html=True)
-            st.markdown(f"**Action:** `{result['recommended_action']}`")
+            with col_r:
+                st.subheader("Decision Output")
 
+                color = RISK_COLORS[result["risk_level"]]
+
+                st.metric("Risk Index", f"{result['risk_score']}%")
+
+                st.markdown(
+                    f"<div style='padding:15px; border-radius:10px; background:{color}; color:white; text-align:center; font-weight:bold;'>{result['risk_level'].upper()} RISK</div>",
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(f"**Action:** `{result['recommended_action']}`")
+
+                if result["risk_level"] == "Low":
+                    st.success("Login allowed. No further action required.")
+
+                elif result["risk_level"] == "Medium":
+                    st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
+
+                elif result["risk_level"] == "High":
+                    st.warning("Additional identity verification required.")
+
+                else:
+                    st.error("Login blocked. Security team is being notified.")
+
+                    alert_result = send_alert(event, result)
+
+                    if alert_result["sent"]:
+                        st.success(alert_result["detail"])
+                    else:
+                        st.warning(alert_result["detail"])
+
+       
     # --- HISTORY SECTION ---
     st.markdown("---")
     st.subheader("📊 Recent System Activity")
