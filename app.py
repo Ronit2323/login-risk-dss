@@ -153,7 +153,7 @@ with tab1:
             elif result["risk_level"] == "Medium":
                 st.warning("Multi-Factor Authentication (MFA) requested before granting access.")
             elif result["risk_level"] == "High":
-                st.warning("Additional identity verification required.")
+                st.warning("Additional identity verification required.(e.g. security questions, callback verification).")
             else:
                 st.error("🚨 Login blocked. Security team is being notified.")
                 # --- AUTOMATED CRITICAL ALERT ---
